@@ -4,34 +4,37 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Home from "./pages/Home";
+import VagaWinLayout from "./components/VagaWinLayout";
+import Dashboard from "./pages/Dashboard";
+import Vagas from "./pages/Vagas";
+import Apartamentos from "./pages/Apartamentos";
+import Sorteio from "./pages/Sorteio";
+import Resultado from "./pages/Resultado";
+import Historico from "./pages/Historico";
+import Login from "./pages/Login";
 
 function Router() {
-  // make sure to consider if you need authentication for certain routes
   return (
     <Switch>
-      <Route path={"/"} component={Home} />
-      <Route path={"/404"} component={NotFound} />
-      {/* Final fallback route */}
+      <Route path="/login" component={Login} />
+      <Route path="/" component={() => <VagaWinLayout><Dashboard /></VagaWinLayout>} />
+      <Route path="/vagas" component={() => <VagaWinLayout><Vagas /></VagaWinLayout>} />
+      <Route path="/apartamentos" component={() => <VagaWinLayout><Apartamentos /></VagaWinLayout>} />
+      <Route path="/sorteio" component={() => <VagaWinLayout><Sorteio /></VagaWinLayout>} />
+      <Route path="/resultado/:id" component={({ params }) => <VagaWinLayout><Resultado id={Number(params.id)} /></VagaWinLayout>} />
+      <Route path="/historico" component={() => <VagaWinLayout><Historico /></VagaWinLayout>} />
+      <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
   );
 }
 
-// NOTE: About Theme
-// - First choose a default theme according to your design style (dark or light bg), than change color palette in index.css
-//   to keep consistent foreground/background color across components
-// - If you want to make theme switchable, pass `switchable` ThemeProvider and use `useTheme` hook
-
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider
-        defaultTheme="light"
-        // switchable
-      >
+      <ThemeProvider defaultTheme="light">
         <TooltipProvider>
-          <Toaster />
+          <Toaster richColors position="top-right" />
           <Router />
         </TooltipProvider>
       </ThemeProvider>

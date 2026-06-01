@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { COOKIE_NAME } from "@shared/const";
-import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { loginUser, registerUser, clearSessionCookie, setSessionCookie } from "./auth";
 import {
   listVagas,
   getVagaById,
@@ -272,10 +271,31 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
+      clearSessionCookie(ctx.req, ctx.res);
       return { success: true } as const;
     }),
+    login: publicProcedure
+      .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { user, token } = await loginUser(input.email, input.password);
+          setSessionCookie(ctx.req, ctx.res, token);
+          return { success: true, user };
+        } catch (e: any) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: e.message ?? "Credenciais inválidas" });
+        }
+      }),
+    register: publicProcedure
+      .input(z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) }))
+      .mutation(async ({ input, ctx }) => {
+        try {
+          const { user, token } = await registerUser(input.email, input.password, input.name);
+          setSessionCookie(ctx.req, ctx.res, token);
+          return { success: true, user };
+        } catch (e: any) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: e.message ?? "Erro ao registrar" });
+        }
+      }),
   }),
   vagas: vagasRouter,
   apartamentos: apartamentosRouter,

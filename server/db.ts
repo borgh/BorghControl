@@ -1,5 +1,6 @@
-import { eq, desc, and } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+import { eq, sql, count } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import {
   InsertUser,
   users,
@@ -9,15 +10,21 @@ import {
   InsertVaga,
   InsertApartamento,
   InsertSorteio,
+  Vaga,
+  Apartamento,
+  Sorteio,
+  User,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+let _pool: Pool | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
-      _db = drizzle(process.env.DATABASE_URL);
+      _pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+      _db = drizzle(_pool);
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;
@@ -33,140 +40,132 @@ export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
 
-  const values: InsertUser = { openId: user.openId };
-  const updateSet: Record<string, unknown> = {};
-  const textFields = ["name", "email", "loginMethod"] as const;
-  type TextField = (typeof textFields)[number];
-  const assignNullable = (field: TextField) => {
-    const value = user[field];
-    if (value === undefined) return;
-    const normalized = value ?? null;
-    values[field] = normalized;
-    updateSet[field] = normalized;
-  };
-  textFields.forEach(assignNullable);
-  if (user.lastSignedIn !== undefined) {
-    values.lastSignedIn = user.lastSignedIn;
-    updateSet.lastSignedIn = user.lastSignedIn;
+  const existing = await db.select().from(users).where(eq(users.openId, user.openId)).limit(1);
+  if (existing.length > 0) {
+    const updateData: Partial<InsertUser> = { lastSignedIn: new Date(), updatedAt: new Date() };
+    if (user.name !== undefined) updateData.name = user.name;
+    if (user.email !== undefined) updateData.email = user.email;
+    if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod;
+    if (user.role !== undefined) updateData.role = user.role;
+    if (user.passwordHash !== undefined) updateData.passwordHash = user.passwordHash;
+    await db.update(users).set(updateData).where(eq(users.openId, user.openId));
+  } else {
+    const allUsers = await db.select({ id: users.id }).from(users).limit(1);
+    const role = allUsers.length === 0 && user.openId === ENV.ownerOpenId ? "admin" : (user.role ?? "user");
+    await db.insert(users).values({
+      ...user,
+      role,
+      lastSignedIn: user.lastSignedIn ?? new Date(),
+      updatedAt: new Date(),
+    });
   }
-  if (user.role !== undefined) {
-    values.role = user.role;
-    updateSet.role = user.role;
-  } else if (user.openId === ENV.ownerOpenId) {
-    values.role = "admin";
-    updateSet.role = "admin";
-  }
-  if (!values.lastSignedIn) values.lastSignedIn = new Date();
-  if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
-  await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
 }
 
-export async function getUserByOpenId(openId: string) {
+export async function getUserByOpenId(openId: string): Promise<User | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
-  return result.length > 0 ? result[0] : undefined;
+  return result[0];
 }
 
 // ─── Vagas ───────────────────────────────────────────────────────────────────
 
-export async function listVagas() {
+export async function listVagas(): Promise<Vaga[]> {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(vagas).orderBy(vagas.numero);
 }
 
-export async function getVagaById(id: number) {
+export async function listVagasAtivas(): Promise<Vaga[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(vagas).where(eq(vagas.status, "ativa")).orderBy(vagas.numero);
+}
+
+export async function getVagaById(id: number): Promise<Vaga | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(vagas).where(eq(vagas.id, id)).limit(1);
   return result[0];
 }
 
-export async function createVaga(data: InsertVaga) {
+export async function createVaga(data: InsertVaga): Promise<Vaga> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
-  const result = await db.insert(vagas).values(data);
-  return result;
+  if (!db) throw new Error("DB not available");
+  const result = await db.insert(vagas).values(data).returning();
+  return result[0]!;
 }
 
-export async function updateVaga(id: number, data: Partial<InsertVaga>) {
+export async function updateVaga(id: number, data: Partial<InsertVaga>): Promise<Vaga | undefined> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
-  await db.update(vagas).set(data).where(eq(vagas.id, id));
+  if (!db) return undefined;
+  const result = await db.update(vagas).set({ ...data, updatedAt: new Date() }).where(eq(vagas.id, id)).returning();
+  return result[0];
 }
 
-export async function deleteVaga(id: number) {
+export async function deleteVaga(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
+  if (!db) return;
   await db.delete(vagas).where(eq(vagas.id, id));
-}
-
-export async function listVagasAtivas() {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(vagas).where(eq(vagas.status, "ativa")).orderBy(vagas.numero);
 }
 
 // ─── Apartamentos ─────────────────────────────────────────────────────────────
 
-export async function listApartamentos() {
+export async function listApartamentos(): Promise<Apartamento[]> {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(apartamentos).orderBy(apartamentos.bloco, apartamentos.numero);
 }
 
-export async function getApartamentoById(id: number) {
+export async function listApartamentosParticipantes(): Promise<Apartamento[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(apartamentos).where(eq(apartamentos.status, "participante")).orderBy(apartamentos.bloco, apartamentos.numero);
+}
+
+export async function getApartamentoById(id: number): Promise<Apartamento | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(apartamentos).where(eq(apartamentos.id, id)).limit(1);
   return result[0];
 }
 
-export async function createApartamento(data: InsertApartamento) {
+export async function createApartamento(data: InsertApartamento): Promise<Apartamento> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
-  return db.insert(apartamentos).values(data);
+  if (!db) throw new Error("DB not available");
+  const result = await db.insert(apartamentos).values(data).returning();
+  return result[0]!;
 }
 
-export async function updateApartamento(id: number, data: Partial<InsertApartamento>) {
+export async function updateApartamento(id: number, data: Partial<InsertApartamento>): Promise<Apartamento | undefined> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
-  await db.update(apartamentos).set(data).where(eq(apartamentos.id, id));
+  if (!db) return undefined;
+  const result = await db.update(apartamentos).set({ ...data, updatedAt: new Date() }).where(eq(apartamentos.id, id)).returning();
+  return result[0];
 }
 
-export async function deleteApartamento(id: number) {
+export async function deleteApartamento(id: number): Promise<void> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
+  if (!db) return;
   await db.delete(apartamentos).where(eq(apartamentos.id, id));
-}
-
-export async function listApartamentosParticipantes() {
-  const db = await getDb();
-  if (!db) return [];
-  return db
-    .select()
-    .from(apartamentos)
-    .where(eq(apartamentos.status, "participante"))
-    .orderBy(apartamentos.bloco, apartamentos.numero);
 }
 
 // ─── Sorteios ─────────────────────────────────────────────────────────────────
 
-export async function createSorteio(data: InsertSorteio) {
+export async function createSorteio(data: InsertSorteio): Promise<Sorteio> {
   const db = await getDb();
-  if (!db) throw new Error("DB unavailable");
-  const result = await db.insert(sorteios).values(data);
-  return result;
+  if (!db) throw new Error("DB not available");
+  const result = await db.insert(sorteios).values(data).returning();
+  return result[0]!;
 }
 
-export async function listSorteios() {
+export async function listSorteios(): Promise<Sorteio[]> {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(sorteios).orderBy(desc(sorteios.realizadoEm));
+  return db.select().from(sorteios).orderBy(sql`${sorteios.realizadoEm} DESC`);
 }
 
-export async function getSorteioById(id: number) {
+export async function getSorteioById(id: number): Promise<Sorteio | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(sorteios).where(eq(sorteios.id, id)).limit(1);
@@ -177,21 +176,21 @@ export async function getSorteioById(id: number) {
 
 export async function getDashboardStats() {
   const db = await getDb();
-  if (!db) return { totalVagas: 0, vagasAtivas: 0, totalApartamentos: 0, apartamentosParticipantes: 0, totalSorteios: 0, ultimosSorteios: [] };
+  if (!db) return { totalVagas: 0, vagasAtivas: 0, totalApartamentos: 0, apartamentosParticipantes: 0, totalSorteios: 0 };
 
-  const [allVagas, allApts, allSorteiosCount, ultimosSorteios] = await Promise.all([
-    db.select().from(vagas),
-    db.select().from(apartamentos),
-    db.select().from(sorteios),
-    db.select().from(sorteios).orderBy(desc(sorteios.realizadoEm)).limit(5),
+  const [totalVagasRes, vagasAtivasRes, totalAptRes, aptPartRes, totalSorteiosRes] = await Promise.all([
+    db.select({ count: count() }).from(vagas),
+    db.select({ count: count() }).from(vagas).where(eq(vagas.status, "ativa")),
+    db.select({ count: count() }).from(apartamentos),
+    db.select({ count: count() }).from(apartamentos).where(eq(apartamentos.status, "participante")),
+    db.select({ count: count() }).from(sorteios),
   ]);
 
   return {
-    totalVagas: allVagas.length,
-    vagasAtivas: allVagas.filter((v) => v.status === "ativa").length,
-    totalApartamentos: allApts.length,
-    apartamentosParticipantes: allApts.filter((a) => a.status === "participante").length,
-    totalSorteios: allSorteiosCount.length,
-    ultimosSorteios,
+    totalVagas: Number(totalVagasRes[0]?.count ?? 0),
+    vagasAtivas: Number(vagasAtivasRes[0]?.count ?? 0),
+    totalApartamentos: Number(totalAptRes[0]?.count ?? 0),
+    apartamentosParticipantes: Number(aptPartRes[0]?.count ?? 0),
+    totalSorteios: Number(totalSorteiosRes[0]?.count ?? 0),
   };
 }

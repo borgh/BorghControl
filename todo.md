@@ -42,3 +42,13 @@
 - [x] Testes do router de apartamentos
 - [x] Testes do algoritmo de sorteio
 - [x] Testes do router de histórico
+
+## Migração Auth e Deploy Externo
+- [ ] Substituir OAuth Manus por autenticação própria (email/senha + JWT)
+- [ ] Criar tabela de usuários internos com hash de senha (bcrypt)
+- [ ] Criar endpoints de registro e login próprios
+- [ ] Adaptar frontend: tela de login/registro sem dependência Manus
+- [ ] Preparar variáveis de ambiente para deploy externo
+- [ ] Criar repositório GitHub e fazer push
+- [ ] Configurar Neon PostgreSQL gratuito
+- [ ] Deploy no Render (gratuito)

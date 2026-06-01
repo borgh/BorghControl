@@ -34,11 +34,8 @@ export default function Dashboard() {
       ]
     : [];
 
-  const barData = stats?.ultimosSorteios?.map((s: any, i: number) => ({
-    name: `Sorteio ${i + 1}`,
-    participantes: s.totalParticipantes,
-    vagas: s.totalVagas,
-  })).reverse() ?? [];
+  // barData não disponível sem ultimosSorteios — usar array vazio
+  const barData: { name: string; participantes: number; vagas: number }[] = [];
 
   const statCards = [
     {

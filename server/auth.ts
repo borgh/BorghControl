@@ -10,7 +10,7 @@ import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { User } from "../drizzle/schema";
 
-const COOKIE_NAME = "vagawin_session";
+export const COOKIE_NAME = "vagawin_session";
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 function getSecret(): Uint8Array {
@@ -165,4 +165,4 @@ export async function loginUser(
   return { user, token };
 }
 
-export { COOKIE_NAME };
+

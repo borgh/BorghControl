@@ -22,9 +22,27 @@ let _pool: Pool | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
+    const dbUrl = process.env.DATABASE_URL;
+    const isPostgres = dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://');
+    if (!isPostgres) {
+      // Não é PostgreSQL — banco local MySQL/TiDB da plataforma Manus
+      return null;
+    }
     try {
-      _pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-      _db = drizzle(_pool);
+      const sslConfigs: any[] = [{ rejectUnauthorized: false }, false];
+      for (const ssl of sslConfigs) {
+        try {
+          _pool = new Pool({ connectionString: dbUrl, ssl });
+          await _pool.query('SELECT 1');
+          _db = drizzle(_pool);
+          break;
+        } catch (e: any) {
+          await _pool?.end().catch(() => {});
+          _pool = null;
+          if (e?.message?.includes('SSL') || e?.code === 'ECONNREFUSED') continue;
+          throw e;
+        }
+      }
     } catch (error) {
       console.warn("[Database] Failed to connect:", error);
       _db = null;

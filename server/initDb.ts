@@ -71,13 +71,28 @@ export async function initDatabase(): Promise<void> {
     return;
   }
 
-  const pool = new Pool({ connectionString: url, ssl: { rejectUnauthorized: false } });
-  try {
-    await pool.query(INIT_SQL);
-    console.log("[DB Init] Database tables initialized successfully.");
-  } catch (err) {
-    console.error("[DB Init] Failed to initialize database:", err);
-  } finally {
-    await pool.end();
+  // Detecta se é PostgreSQL (Neon, Render, etc.) ou outro banco
+  const isPostgres = url.startsWith('postgresql://') || url.startsWith('postgres://');
+  if (!isPostgres) {
+    console.log("[DB Init] Non-PostgreSQL database detected, skipping PG init.");
+    return;
   }
+
+  // Tenta com SSL primeiro (Neon/produção), depois sem SSL (local)
+  const sslConfigs: any[] = [{ rejectUnauthorized: false }, false];
+  for (const ssl of sslConfigs) {
+    const pool = new Pool({ connectionString: url, ssl });
+    try {
+      await pool.query(INIT_SQL);
+      console.log("[DB Init] Database tables initialized successfully.");
+      await pool.end();
+      return;
+    } catch (err: any) {
+      await pool.end().catch(() => {});
+      if (err?.message?.includes('SSL') || err?.code === 'ECONNREFUSED') continue;
+      console.error("[DB Init] Failed to initialize database:", err);
+      return;
+    }
+  }
+  console.warn("[DB Init] Could not connect to PostgreSQL database.");
 }

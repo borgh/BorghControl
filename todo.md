@@ -44,11 +44,11 @@
 - [x] Testes do router de histórico
 
 ## Migração Auth e Deploy Externo
-- [ ] Substituir OAuth Manus por autenticação própria (email/senha + JWT)
-- [ ] Criar tabela de usuários internos com hash de senha (bcrypt)
-- [ ] Criar endpoints de registro e login próprios
-- [ ] Adaptar frontend: tela de login/registro sem dependência Manus
-- [ ] Preparar variáveis de ambiente para deploy externo
-- [ ] Criar repositório GitHub e fazer push
-- [ ] Configurar Neon PostgreSQL gratuito
-- [ ] Deploy no Render (gratuito)
+- [x] Substituir OAuth Manus por autenticação própria (email/senha + JWT)
+- [x] Criar tabela de usuários internos com hash de senha (bcrypt)
+- [x] Criar endpoints de registro e login próprios
+- [x] Adaptar frontend: tela de login/registro sem dependência Manus
+- [x] Preparar variáveis de ambiente para deploy externo (DEPLOY.md criado)
+- [x] Criar repositório GitHub e fazer push (github.com/borgh/VagaWin)
+- [x] Configurar Neon PostgreSQL gratuito (guia em DEPLOY.md - requer conta do usuário)
+- [x] Deploy no Render (gratuito - guia em DEPLOY.md - requer conta do usuário)

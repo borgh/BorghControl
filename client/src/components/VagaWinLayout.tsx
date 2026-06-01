@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useLocation as useWouterLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { getLoginUrl } from "@/const";
 import {
   LayoutDashboard,
   ParkingSquare,
@@ -40,10 +39,12 @@ export default function VagaWinLayout({ children }: VagaWinLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
+  const [, setLocation] = useWouterLocation();
+
   const logoutMutation = trpc.auth.logout.useMutation({
     onSuccess: () => {
       toast.success("Sessão encerrada com sucesso.");
-      window.location.href = getLoginUrl();
+      setLocation("/login");
     },
   });
 
@@ -59,7 +60,7 @@ export default function VagaWinLayout({ children }: VagaWinLayoutProps) {
   }
 
   if (!isAuthenticated) {
-    window.location.href = getLoginUrl();
+    setLocation("/login");
     return null;
   }
 

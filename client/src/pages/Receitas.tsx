@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -78,6 +79,7 @@ export default function Receitas() {
     onError: (e) => toast.error(e.message),
   });
 
+  const { can } = usePermissions();
   const items = data?.items ?? [];
   const total = items.reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalRecebido = items.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
@@ -112,9 +114,11 @@ export default function Receitas() {
             <p className="text-xs text-muted-foreground">{items.length} lançamentos</p>
           </div>
         </div>
-        <Button onClick={() => { setEditItem(null); setModal(true); }} size="sm" className="gap-2">
-          <Plus className="h-4 w-4" /> Nova Receita
-        </Button>
+        {can("create_lancamentos") && (
+          <Button onClick={() => { setEditItem(null); setModal(true); }} size="sm" className="gap-2">
+            <Plus className="h-4 w-4" /> Nova Receita
+          </Button>
+        )}
       </div>
 
       {/* Resumo */}
@@ -234,22 +238,26 @@ export default function Receitas() {
                         <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">Recebido</Badge>
                       )}
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {isPendente && (
+                        {isPendente && can("mark_paid") && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como recebido">
                             <Check className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        {item.status === "pago" && (
+                        {item.status === "pago" && can("mark_paid") && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
                             <RotateCcw className="h-3.5 w-3.5" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        {can("edit_lancamentos") && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {can("delete_lancamentos") && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>

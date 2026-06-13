@@ -83,3 +83,13 @@ export const transacoes = pgTable(
 
 export type Transacao = typeof transacoes.$inferSelect;
 export type InsertTransacao = typeof transacoes.$inferInsert;
+
+// ─── Configurações do Sistema ─────────────────────────────────────────────────
+export const systemConfig = pgTable("system_config", {
+  id: serial("id").primaryKey(),
+  chave: varchar("chave", { length: 100 }).notNull().unique(),
+  valor: text("valor").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+
+export type SystemConfig = typeof systemConfig.$inferSelect;

@@ -2,7 +2,7 @@ import { eq, and, desc, sql, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
-import { users, categorias, transacoes, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
+import { users, categorias, transacoes, systemConfig, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -25,6 +25,39 @@ export async function getDb() {
 }
 
 // ─── Gerenciamento de Usuários (Admin) ──────────────────────────────────────
+
+// ─── Permissões do Sistema ──────────────────────────────────────────────────
+
+export const DEFAULT_USER_PERMISSIONS: Record<string, boolean> = {
+  view_dashboard: true,
+  create_lancamentos: true,
+  edit_lancamentos: true,
+  delete_lancamentos: false,
+  mark_paid: true,
+  manage_categorias: true,
+  view_relatorios: true,
+  manage_users: false,
+};
+
+export async function getUserPermissions(): Promise<Record<string, boolean>> {
+  const db = await getDb();
+  if (!db) return DEFAULT_USER_PERMISSIONS;
+  try {
+    const rows = await db.select().from(systemConfig).where(eq(systemConfig.chave, 'user_permissions'));
+    if (rows.length > 0) {
+      return JSON.parse(rows[0].valor) as Record<string, boolean>;
+    }
+  } catch {}
+  return DEFAULT_USER_PERMISSIONS;
+}
+
+export async function saveUserPermissions(permissions: Record<string, boolean>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error('DB not available');
+  await db.insert(systemConfig)
+    .values({ chave: 'user_permissions', valor: JSON.stringify(permissions) })
+    .onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: new Date() } });
+}
 
 export async function listUsers() {
   const db = await getDb();

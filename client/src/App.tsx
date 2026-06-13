@@ -14,6 +14,7 @@ import Configuracoes from "./pages/Configuracoes";
 import BorghLayout from "./components/BorghLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
+import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, loading } = useAuth();
@@ -54,6 +55,7 @@ export default function App() {
         <TooltipProvider>
           <Toaster richColors position="top-right" />
           <Router />
+          <PWAInstallPrompt />
         </TooltipProvider>
       </ThemeProvider>
     </ErrorBoundary>

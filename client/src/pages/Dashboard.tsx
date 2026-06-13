@@ -1,14 +1,14 @@
-import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
@@ -36,12 +36,14 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
   );
 }
 
-function VencimentoLista({ items, tipo }: { items: any[]; tipo: "despesa" | "receita" }) {
+function VencimentoLista({ items, tipo, atraso = false }: { items: any[]; tipo: "despesa" | "receita"; atraso?: boolean }) {
   const isDespesa = tipo === "despesa";
+  const defaultColor = isDespesa ? "#ef4444" : "#10b981";
+
   if (items.length === 0) {
     return (
       <p className="text-sm text-muted-foreground text-center py-3">
-        Nenhum vencimento nos próximos 7 dias
+        {atraso ? "Nenhum lançamento em atraso" : "Nenhum vencimento nos próximos 7 dias"}
       </p>
     );
   }
@@ -50,25 +52,40 @@ function VencimentoLista({ items, tipo }: { items: any[]; tipo: "despesa" | "rec
       {items.map((v: any) => (
         <div
           key={v.id}
-          className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+          className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+            atraso
+              ? "bg-red-50/80 hover:bg-red-50 border border-red-100"
+              : "bg-muted/50 hover:bg-muted"
+          }`}
         >
           <div className="flex items-center gap-3 min-w-0">
             <div
               className="h-2 w-2 rounded-full shrink-0"
-              style={{ background: v.categoriaCor ?? (isDespesa ? "#ef4444" : "#10b981") }}
+              style={{ background: v.categoriaCor ?? defaultColor }}
             />
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{v.descricao}</p>
               <p className="text-xs text-muted-foreground">
-                {v.categoriaNome ?? "Sem categoria"} · Dia {v.diaVencimento}
+                {v.categoriaNome ?? "Sem categoria"}
+                {atraso
+                  ? ` · ${MESES_FULL[v.mes]}/${v.ano} · Dia ${v.diaVencimento}`
+                  : ` · Dia ${v.diaVencimento}`}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <span className={`text-sm font-semibold ${isDespesa ? "text-red-600" : "text-emerald-600"}`}>
+            <span className={`text-sm font-semibold ${
+              atraso ? "text-red-700" : isDespesa ? "text-red-600" : "text-emerald-600"
+            }`}>
               {fmt(Number(v.valor))}
             </span>
-            <Badge variant="outline" className="text-xs badge-pendente">Pendente</Badge>
+            {atraso ? (
+              <Badge className="text-xs bg-red-100 text-red-700 border border-red-300 hover:bg-red-100">
+                Atrasado
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="text-xs">Pendente</Badge>
+            )}
           </div>
         </div>
       ))}
@@ -97,6 +114,10 @@ export default function Dashboard() {
         <Skeleton className="h-48" />
         <Skeleton className="h-48" />
       </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Skeleton className="h-48" />
+        <Skeleton className="h-48" />
+      </div>
     </div>
   );
 
@@ -105,6 +126,8 @@ export default function Dashboard() {
   const categorias = stats?.despesasPorCategoria ?? [];
   const vencimentosDespesas = stats?.proximosVencimentosDespesas ?? [];
   const vencimentosReceitas = stats?.proximosVencimentosReceitas ?? [];
+  const atrasoDespesas = stats?.atrasoDespesas ?? [];
+  const atrasoReceitas = stats?.atrasoReceitas ?? [];
 
   return (
     <div className="space-y-6">
@@ -126,7 +149,6 @@ export default function Dashboard() {
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Anual */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Receitas × Despesas — {hoje.getFullYear()}</CardTitle>
@@ -145,7 +167,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Categorias */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Despesas por Categoria</CardTitle>
@@ -168,9 +189,8 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Próximos vencimentos — separados por tipo */}
+      {/* Próximos vencimentos */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Despesas */}
         <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -191,7 +211,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Receitas */}
         <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -209,6 +228,49 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <VencimentoLista items={vencimentosReceitas} tipo="receita" />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Em atraso */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className={atrasoDespesas.length > 0 ? "border-red-200" : ""}>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <AlertTriangle className={`h-4 w-4 ${atrasoDespesas.length > 0 ? "text-red-600" : "text-muted-foreground"}`} />
+              Despesas em Atraso
+              {atrasoDespesas.length > 0 && (
+                <Badge className="ml-1 bg-red-600 text-white border-red-600 text-xs font-semibold">
+                  {atrasoDespesas.length}
+                </Badge>
+              )}
+            </CardTitle>
+            <Link href="/despesas">
+              <Button variant="ghost" size="sm" className="text-xs h-7">Ver todas</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <VencimentoLista items={atrasoDespesas} tipo="despesa" atraso />
+          </CardContent>
+        </Card>
+
+        <Card className={atrasoReceitas.length > 0 ? "border-orange-200" : ""}>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <AlertTriangle className={`h-4 w-4 ${atrasoReceitas.length > 0 ? "text-orange-500" : "text-muted-foreground"}`} />
+              Receitas em Atraso
+              {atrasoReceitas.length > 0 && (
+                <Badge className="ml-1 bg-orange-500 text-white border-orange-500 text-xs font-semibold">
+                  {atrasoReceitas.length}
+                </Badge>
+              )}
+            </CardTitle>
+            <Link href="/receitas">
+              <Button variant="ghost" size="sm" className="text-xs h-7">Ver todas</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <VencimentoLista items={atrasoReceitas} tipo="receita" atraso />
           </CardContent>
         </Card>
       </div>

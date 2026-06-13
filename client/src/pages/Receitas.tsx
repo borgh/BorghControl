@@ -3,17 +3,36 @@ import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2 } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
-const MESES = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+const MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-export default function Despesas() {
+function RecorrenciaBadge({ item }: { item: any }) {
+  if (!item.recorrente) return null;
+  if (item.totalParcelas == null) {
+    return (
+      <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50">
+        <Infinity className="h-2.5 w-2.5" /> Contrato
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50">
+      <Repeat className="h-2.5 w-2.5" /> {item.parcelaAtual}/{item.totalParcelas}
+    </Badge>
+  );
+}
+
+export default function Receitas() {
   const hoje = new Date();
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
@@ -21,7 +40,8 @@ export default function Despesas() {
   const [busca, setBusca] = useState("");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string; totalParcelas?: number | null } | null>(null);
+  const [deleteMode, setDeleteMode] = useState<"single" | "group">("single");
 
   const utils = trpc.useUtils();
   const { data: anosData } = trpc.relatorios.anosDisponiveis.useQuery();
@@ -36,23 +56,45 @@ export default function Despesas() {
     busca: busca || undefined,
   });
 
+  const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };
+
   const marcarPago = trpc.transacoes.marcarPago.useMutation({
-    onSuccess: () => { toast.success("Marcado como pago!"); utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); },
+    onSuccess: () => { toast.success("Marcado como recebido!"); invalidate(); },
     onError: (e) => toast.error(e.message),
   });
   const marcarPendente = trpc.transacoes.marcarPendente.useMutation({
-    onSuccess: () => { toast.success("Marcado como pendente!"); utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); },
+    onSuccess: () => { toast.success("Marcado como pendente!"); invalidate(); },
     onError: (e) => toast.error(e.message),
   });
   const deleteMut = trpc.transacoes.delete.useMutation({
-    onSuccess: () => { toast.success("Excluído!"); utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); setDeleteId(null); },
+    onSuccess: () => { toast.success("Excluído!"); invalidate(); setDeleteTarget(null); },
+    onError: (e) => toast.error(e.message),
+  });
+  const deleteGrupoMut = trpc.transacoes.deleteGrupo.useMutation({
+    onSuccess: () => { toast.success("Série excluída!"); invalidate(); setDeleteTarget(null); },
     onError: (e) => toast.error(e.message),
   });
 
   const items = data?.items ?? [];
   const total = items.reduce((s: number, i: any) => s + Number(i.valor), 0);
-  const totalPago = items.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalRecebido = items.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalPendente = items.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
+
+  const handleDeleteClick = (item: any) => {
+    setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId, totalParcelas: item.totalParcelas });
+    setDeleteMode("single");
+  };
+
+  const confirmDelete = () => {
+    if (!deleteTarget) return;
+    if (deleteMode === "group" && deleteTarget.grupoId) {
+      deleteGrupoMut.mutate({ grupoId: deleteTarget.grupoId });
+    } else {
+      deleteMut.mutate({ id: deleteTarget.id });
+    }
+  };
+
+  const hasGroup = !!deleteTarget?.grupoId;
 
   return (
     <div className="space-y-5">
@@ -60,7 +102,7 @@ export default function Despesas() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <div className="h-9 w-9 rounded-xl bg-emerald-100 flex items-center justify-center">
-            <TrendingUp className="h-5 w-5 text-red-600" />
+            <TrendingUp className="h-5 w-5 text-emerald-600" />
           </div>
           <div>
             <h1 className="text-xl font-bold">Contas a Receber</h1>
@@ -74,9 +116,24 @@ export default function Despesas() {
 
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-3">
-        <Card className="bg-emerald-50 border-emerald-100"><CardContent className="p-4 text-center"><p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Total</p><p className="text-lg font-bold text-emerald-700">{fmt(total)}</p></CardContent></Card>
-        <Card className="bg-emerald-50 border-emerald-100"><CardContent className="p-4 text-center"><p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Pago</p><p className="text-lg font-bold text-emerald-700">{fmt(totalPago)}</p></CardContent></Card>
-        <Card className="bg-amber-50 border-amber-100"><CardContent className="p-4 text-center"><p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Pendente</p><p className="text-lg font-bold text-amber-700">{fmt(totalPendente)}</p></CardContent></Card>
+        <Card className="bg-emerald-50 border-emerald-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Total</p>
+            <p className="text-lg font-bold text-emerald-700">{fmt(total)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-emerald-50 border-emerald-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Recebido</p>
+            <p className="text-lg font-bold text-emerald-700">{fmt(totalRecebido)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-50 border-amber-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
+            <p className="text-lg font-bold text-amber-700">{fmt(totalPendente)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filtros */}
@@ -89,7 +146,7 @@ export default function Despesas() {
             </div>
             <Select value={mes} onValueChange={setMes}>
               <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>{MESES.slice(1).map((m, i) => <SelectItem key={i} value={String(i+1)}>{m}</SelectItem>)}</SelectContent>
+              <SelectContent>{MESES.slice(1).map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={ano} onValueChange={setAno}>
               <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
@@ -100,7 +157,7 @@ export default function Despesas() {
               <SelectContent>
                 <SelectItem value="todos">Todos</SelectItem>
                 <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
+                <SelectItem value="pago">Recebido</SelectItem>
                 <SelectItem value="cancelado">Cancelado</SelectItem>
               </SelectContent>
             </Select>
@@ -127,9 +184,15 @@ export default function Despesas() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{item.descricao}</p>
-                      {item.diaVencimento && <span className="text-xs text-muted-foreground">dia {item.diaVencimento}</span>}
+                      <RecorrenciaBadge item={item} />
                     </div>
-                    <p className="text-xs text-muted-foreground">{item.categoriaNome ?? "Sem categoria"}{item.formaPagamento ? ` · ${item.formaPagamento}` : ""}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {item.categoriaNome ?? "Sem categoria"}
+                      {item.formaPagamento ? ` · ${item.formaPagamento}` : ""}
+                      {item.dataVencimento
+                        ? ` · vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
+                        : item.diaVencimento ? ` · dia ${item.diaVencimento}` : ""}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-sm font-semibold text-emerald-600">{fmt(Number(item.valor))}</span>
@@ -150,7 +213,7 @@ export default function Despesas() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(item.id)}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -162,13 +225,44 @@ export default function Despesas() {
         </CardContent>
       </Card>
 
-      <TransacaoModal open={modal} onClose={() => setModal(false)} tipo="despesa" editItem={editItem} onSuccess={() => utils.transacoes.list.invalidate()} />
-      <AlertDialog open={deleteId !== null} onOpenChange={(o) => !o && setDeleteId(null)}>
+      <TransacaoModal open={modal} onClose={() => setModal(false)} tipo="receita" editItem={editItem} onSuccess={invalidate} />
+
+      {/* Dialog de exclusão — com opção de excluir grupo se for recorrente */}
+      <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Excluir receita?</AlertDialogTitle><AlertDialogDescription>Esta ação não pode ser desfeita.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir receita?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {hasGroup
+                ? "Esta receita faz parte de uma série recorrente. Escolha como deseja excluir:"
+                : "Esta ação não pode ser desfeita."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {hasGroup && (
+            <div className="flex flex-col gap-2 py-2">
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
+                <input type="radio" name="deleteModeReceita" checked={deleteMode === "single"} onChange={() => setDeleteMode("single")} className="mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Apenas este lançamento</p>
+                  <p className="text-xs text-muted-foreground">Remove somente esta parcela, mantendo as demais.</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
+                <input type="radio" name="deleteModeReceita" checked={deleteMode === "group"} onChange={() => setDeleteMode("group")} className="mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Toda a série</p>
+                  <p className="text-xs text-muted-foreground">Remove todos os lançamentos desta série recorrente.</p>
+                </div>
+              </label>
+            </div>
+          )}
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => deleteId && deleteMut.mutate({ id: deleteId })} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {deleteMode === "group" ? "Excluir Toda a Série" : "Excluir"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

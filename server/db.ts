@@ -1,6 +1,7 @@
 import { eq, and, desc, sql, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
+import { randomUUID } from "crypto";
 import { users, categorias, transacoes, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -105,9 +106,12 @@ export async function listTransacoes(params: {
     db.select({
       id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
       tipo: transacoes.tipo, status: transacoes.status, vencimentoTexto: transacoes.vencimentoTexto,
-      diaVencimento: transacoes.diaVencimento, mes: transacoes.mes, ano: transacoes.ano,
+      diaVencimento: transacoes.diaVencimento, dataVencimento: transacoes.dataVencimento,
+      mes: transacoes.mes, ano: transacoes.ano,
       categoriaId: transacoes.categoriaId, formaPagamento: transacoes.formaPagamento,
       observacao: transacoes.observacao, recorrente: transacoes.recorrente,
+      recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
+      totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
       createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
       categoriaNome: categorias.nome, categoriaCor: categorias.cor, categoriaIcone: categorias.icone,
     })
@@ -127,9 +131,12 @@ export async function getTransacaoById(id: number) {
   const result = await db.select({
     id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
     tipo: transacoes.tipo, status: transacoes.status, vencimentoTexto: transacoes.vencimentoTexto,
-    diaVencimento: transacoes.diaVencimento, mes: transacoes.mes, ano: transacoes.ano,
+    diaVencimento: transacoes.diaVencimento, dataVencimento: transacoes.dataVencimento,
+    mes: transacoes.mes, ano: transacoes.ano,
     categoriaId: transacoes.categoriaId, formaPagamento: transacoes.formaPagamento,
     observacao: transacoes.observacao, recorrente: transacoes.recorrente,
+    recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
+    totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
     createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
     categoriaNome: categorias.nome, categoriaCor: categorias.cor,
   })
@@ -144,6 +151,124 @@ export async function createTransacao(data: InsertTransacao) {
   if (!db) throw new Error("DB unavailable");
   const result = await db.insert(transacoes).values(data).returning();
   return result[0];
+}
+
+/**
+ * Cria uma transação com recorrência:
+ * - recorrente=true + totalParcelas=null → permanente (gera 24 meses à frente)
+ * - recorrente=true + totalParcelas=N → gera N parcelas mensais
+ * - recorrente=false → cria apenas uma transação
+ */
+export async function createTransacaoComRecorrencia(data: {
+  descricao: string;
+  valor: string;
+  tipo: "despesa" | "receita";
+  status: "pendente" | "pago" | "cancelado";
+  dataVencimento?: string; // YYYY-MM-DD
+  diaVencimento?: number;
+  vencimentoTexto?: string;
+  mes: number;
+  ano: number;
+  categoriaId?: number;
+  formaPagamento?: string;
+  observacao?: string;
+  recorrente: boolean;
+  totalParcelas?: number | null; // null = permanente, N = parcelas
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  if (!data.recorrente) {
+    // Transação única — sem recorrência
+    const result = await db.insert(transacoes).values({
+      descricao: data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      status: data.status,
+      dataVencimento: data.dataVencimento ?? null,
+      diaVencimento: data.diaVencimento ?? null,
+      vencimentoTexto: data.vencimentoTexto ?? null,
+      mes: data.mes,
+      ano: data.ano,
+      categoriaId: data.categoriaId ?? null,
+      formaPagamento: data.formaPagamento ?? null,
+      observacao: data.observacao ?? null,
+      recorrente: false,
+      recorrenciaGrupoId: null,
+      totalParcelas: null,
+      parcelaAtual: null,
+    }).returning();
+    return { created: result, grupoId: null };
+  }
+
+  // Recorrente: gerar série de parcelas
+  const grupoId = randomUUID();
+  const mesesParaGerar = data.totalParcelas == null ? 24 : data.totalParcelas;
+  const registros: InsertTransacao[] = [];
+
+  for (let i = 0; i < mesesParaGerar; i++) {
+    // Calcular mês/ano da parcela
+    const totalMes = (data.mes - 1) + i;
+    const mesParcela = (totalMes % 12) + 1;
+    const anoParcela = data.ano + Math.floor(totalMes / 12);
+
+    // Calcular dataVencimento da parcela
+    let dataVencimentoParcela: string | null = null;
+    if (data.dataVencimento) {
+      const baseDate = new Date(data.dataVencimento + "T12:00:00");
+      const parcelaDate = new Date(baseDate);
+      parcelaDate.setMonth(baseDate.getMonth() + i);
+      // Ajustar para último dia do mês se necessário
+      const ultimoDia = new Date(parcelaDate.getFullYear(), parcelaDate.getMonth() + 1, 0).getDate();
+      if (parcelaDate.getDate() > ultimoDia) parcelaDate.setDate(ultimoDia);
+      dataVencimentoParcela = parcelaDate.toISOString().split("T")[0];
+    }
+
+    registros.push({
+      descricao: data.totalParcelas != null
+        ? `${data.descricao} (${i + 1}/${data.totalParcelas})`
+        : data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      status: i === 0 ? data.status : "pendente",
+      dataVencimento: dataVencimentoParcela,
+      diaVencimento: data.diaVencimento ?? null,
+      vencimentoTexto: data.vencimentoTexto ?? null,
+      mes: mesParcela,
+      ano: anoParcela,
+      categoriaId: data.categoriaId ?? null,
+      formaPagamento: data.formaPagamento ?? null,
+      observacao: data.observacao ?? null,
+      recorrente: true,
+      recorrenciaGrupoId: grupoId,
+      totalParcelas: data.totalParcelas ?? null,
+      parcelaAtual: i + 1,
+    });
+  }
+
+  const result = await db.insert(transacoes).values(registros).returning();
+  return { created: result, grupoId };
+}
+
+/**
+ * Deleta todas as parcelas de um grupo de recorrência a partir de uma parcela específica
+ */
+export async function deleteRecorrenciaGrupo(grupoId: string, aPartirDe?: { mes: number; ano: number }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  if (!aPartirDe) {
+    // Deletar todas as parcelas do grupo
+    await db.delete(transacoes).where(eq(transacoes.recorrenciaGrupoId, grupoId));
+  } else {
+    // Deletar apenas as parcelas futuras (a partir do mês/ano especificado)
+    await db.delete(transacoes).where(
+      and(
+        eq(transacoes.recorrenciaGrupoId, grupoId),
+        sql`(${transacoes.ano} > ${aPartirDe.ano} OR (${transacoes.ano} = ${aPartirDe.ano} AND ${transacoes.mes} >= ${aPartirDe.mes}))`
+      )
+    );
+  }
 }
 
 export async function updateTransacao(id: number, data: Partial<InsertTransacao>) {
@@ -219,6 +344,7 @@ export async function getProximosVencimentos(diasAfrente = 7) {
   return db.select({
     id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
     tipo: transacoes.tipo, diaVencimento: transacoes.diaVencimento, vencimentoTexto: transacoes.vencimentoTexto,
+    dataVencimento: transacoes.dataVencimento,
     mes: transacoes.mes, ano: transacoes.ano, status: transacoes.status,
     categoriaNome: categorias.nome, categoriaCor: categorias.cor,
   })

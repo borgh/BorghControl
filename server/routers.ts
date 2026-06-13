@@ -5,7 +5,8 @@ import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { loginUser, registerUser, COOKIE_NAME } from "./auth";
 import {
   listCategorias, createCategoria, updateCategoria, deleteCategoria,
-  listTransacoes, getTransacaoById, createTransacao, updateTransacao, deleteTransacao,
+  listTransacoes, getTransacaoById, createTransacaoComRecorrencia, updateTransacao, deleteTransacao,
+  deleteRecorrenciaGrupo,
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
 } from "./db";
@@ -58,14 +59,73 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .query(async ({ input }) => getTransacaoById(input.id)),
     create: protectedProcedure
-      .input(z.object({ descricao: z.string().min(1).max(255), valor: z.number().positive(), tipo: z.enum(["despesa", "receita"]), status: z.enum(["pendente", "pago", "cancelado"]).optional(), vencimentoTexto: z.string().optional(), diaVencimento: z.number().min(1).max(31).optional(), mes: z.number().min(1).max(12), ano: z.number(), categoriaId: z.number().optional(), formaPagamento: z.string().optional(), observacao: z.string().optional(), recorrente: z.boolean().optional() }))
-      .mutation(async ({ input }) => createTransacao({ ...input, valor: String(input.valor) })),
+      .input(z.object({
+        descricao: z.string().min(1).max(255),
+        valor: z.number().positive(),
+        tipo: z.enum(["despesa", "receita"]),
+        status: z.enum(["pendente", "pago", "cancelado"]).optional(),
+        dataVencimento: z.string().optional(),   // YYYY-MM-DD
+        diaVencimento: z.number().min(1).max(31).optional(),
+        vencimentoTexto: z.string().optional(),
+        mes: z.number().min(1).max(12),
+        ano: z.number(),
+        categoriaId: z.number().optional(),
+        formaPagamento: z.string().optional(),
+        observacao: z.string().optional(),
+        recorrente: z.boolean().optional(),
+        totalParcelas: z.number().min(1).max(360).nullable().optional(), // null = permanente
+      }))
+      .mutation(async ({ input }) => {
+        return createTransacaoComRecorrencia({
+          descricao: input.descricao,
+          valor: String(input.valor),
+          tipo: input.tipo,
+          status: input.status ?? "pendente",
+          dataVencimento: input.dataVencimento,
+          diaVencimento: input.diaVencimento,
+          vencimentoTexto: input.vencimentoTexto,
+          mes: input.mes,
+          ano: input.ano,
+          categoriaId: input.categoriaId,
+          formaPagamento: input.formaPagamento,
+          observacao: input.observacao,
+          recorrente: input.recorrente ?? false,
+          totalParcelas: input.recorrente ? (input.totalParcelas ?? null) : undefined,
+        });
+      }),
     update: protectedProcedure
-      .input(z.object({ id: z.number(), descricao: z.string().min(1).max(255).optional(), valor: z.number().positive().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), vencimentoTexto: z.string().optional(), diaVencimento: z.number().min(1).max(31).optional(), mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), categoriaId: z.number().nullable().optional(), formaPagamento: z.string().optional(), observacao: z.string().optional(), recorrente: z.boolean().optional() }))
-      .mutation(async ({ input }) => { const { id, valor, ...rest } = input; return updateTransacao(id, { ...rest, ...(valor !== undefined ? { valor: String(valor) } : {}) }); }),
+      .input(z.object({
+        id: z.number(),
+        descricao: z.string().min(1).max(255).optional(),
+        valor: z.number().positive().optional(),
+        tipo: z.enum(["despesa", "receita"]).optional(),
+        status: z.enum(["pendente", "pago", "cancelado"]).optional(),
+        dataVencimento: z.string().nullable().optional(),
+        diaVencimento: z.number().min(1).max(31).nullable().optional(),
+        vencimentoTexto: z.string().optional(),
+        mes: z.number().min(1).max(12).optional(),
+        ano: z.number().optional(),
+        categoriaId: z.number().nullable().optional(),
+        formaPagamento: z.string().optional(),
+        observacao: z.string().optional(),
+        recorrente: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, valor, ...rest } = input;
+        return updateTransacao(id, { ...rest, ...(valor !== undefined ? { valor: String(valor) } : {}) });
+      }),
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => { await deleteTransacao(input.id); return { success: true }; }),
+    deleteGrupo: protectedProcedure
+      .input(z.object({
+        grupoId: z.string(),
+        aPartirDe: z.object({ mes: z.number(), ano: z.number() }).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await deleteRecorrenciaGrupo(input.grupoId, input.aPartirDe);
+        return { success: true };
+      }),
     marcarPago: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => updateTransacao(input.id, { status: "pago" })),

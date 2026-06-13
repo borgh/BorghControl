@@ -9,6 +9,7 @@ import {
   boolean,
   index,
   serial,
+  date,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -57,12 +58,17 @@ export const transacoes = pgTable(
     status: statusTransacaoEnum("status").default("pendente").notNull(),
     vencimentoTexto: varchar("vencimentoTexto", { length: 20 }), // ex: "DIA 10"
     diaVencimento: integer("diaVencimento"), // número do dia 1-31
+    dataVencimento: date("dataVencimento"),  // data completa YYYY-MM-DD
     mes: integer("mes").notNull(), // 1-12
     ano: integer("ano").notNull(), // ex: 2025
     categoriaId: integer("categoriaId"),
     formaPagamento: varchar("formaPagamento", { length: 50 }),
     observacao: text("observacao"),
     recorrente: boolean("recorrente").default(false),
+    // Campos de controle de recorrência em série
+    recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }), // UUID do grupo de parcelas
+    totalParcelas: integer("totalParcelas"),   // null = permanente, N = total de parcelas
+    parcelaAtual: integer("parcelaAtual"),     // 1, 2, 3... (null para não-recorrentes)
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
@@ -70,6 +76,7 @@ export const transacoes = pgTable(
     idxMesAno: index("idx_mes_ano").on(table.mes, table.ano),
     idxTipo: index("idx_tipo").on(table.tipo),
     idxStatus: index("idx_status").on(table.status),
+    idxGrupo: index("idx_recorrencia_grupo").on(table.recorrenciaGrupoId),
   })
 );
 

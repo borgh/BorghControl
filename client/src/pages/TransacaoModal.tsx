@@ -114,7 +114,22 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
     onError: (e) => toast.error(e.message),
   });
 
-  const loading = createMut.isPending || updateMut.isPending;
+  const updateRecorrenciaMut = trpc.transacoes.updateComRecorrencia.useMutation({
+    onSuccess: (res: any) => {
+      const count = (res?.created?.length ?? 0) + 1;
+      if (count > 1) {
+        toast.success(`Lançamento atualizado! ${count - 1} parcelas futuras geradas.`);
+      } else {
+        toast.success("Lançamento atualizado!");
+      }
+      invalidate();
+      onSuccess();
+      onClose();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const loading = createMut.isPending || updateMut.isPending || updateRecorrenciaMut.isPending;
   const f = (k: string, v: any) => setForm((p) => ({ ...p, [k]: v }));
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -156,8 +171,29 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
     };
 
     if (editItem) {
-      // Edição: atualiza apenas este registro
-      updateMut.mutate({ id: editItem.id, ...data });
+      // Edição com recorrência: usa updateComRecorrencia para gerar parcelas futuras
+      if (recorrente) {
+        updateRecorrenciaMut.mutate({
+          id: editItem.id,
+          descricao: data.descricao,
+          valor: data.valor,
+          tipo: data.tipo,
+          status: data.status,
+          dataVencimento: data.dataVencimento,
+          diaVencimento: data.diaVencimento,
+          vencimentoTexto: data.vencimentoTexto,
+          mes: data.mes,
+          ano: data.ano,
+          categoriaId: data.categoriaId ?? null,
+          formaPagamento: data.formaPagamento,
+          observacao: data.observacao,
+          recorrente: true,
+          totalParcelas: totalParcelas ?? null,
+        });
+      } else {
+        // Edição simples (único): apenas atualiza este registro
+        updateMut.mutate({ id: editItem.id, ...data, recorrente: false });
+      }
     } else {
       createMut.mutate(data);
     }
@@ -279,15 +315,21 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
             {tipoRecorrencia === "contrato" && (
               <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
                 {isEdit
-                  ? "Este lançamento faz parte de um contrato mensal permanente."
+                  ? <>Este lançamento será atualizado e as parcelas futuras serão <strong>regeradas para os próximos 24 meses</strong>.</>
                   : <>Serão gerados lançamentos para os próximos <strong>24 meses</strong>. Você pode excluir parcelas futuras a qualquer momento.</>
                 }
               </div>
             )}
 
-            {isEdit && tipoRecorrencia !== "unico" && (
+            {isEdit && tipoRecorrencia === "parcelas" && (
               <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
-                Na edição, apenas <strong>este lançamento</strong> será alterado. Para alterar toda a série, edite cada parcela individualmente ou exclua e recrie.
+                Este lançamento será atualizado e as <strong>parcelas futuras serão regeradas</strong> a partir deste mês.
+              </div>
+            )}
+
+            {isEdit && tipoRecorrencia === "unico" && editItem?.recorrenciaGrupoId && (
+              <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-700">
+                Ao mudar para Pagamento Único, apenas <strong>este lançamento</strong> será alterado. As demais parcelas do grupo permanecem.
               </div>
             )}
           </div>

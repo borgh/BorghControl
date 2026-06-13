@@ -5,7 +5,7 @@ import { publicProcedure, protectedProcedure, permissionProcedure, router } from
 import { loginUser, registerUser, COOKIE_NAME } from "./auth";
 import {
   listCategorias, createCategoria, updateCategoria, deleteCategoria,
-  listTransacoes, getTransacaoById, createTransacaoComRecorrencia, updateTransacao, deleteTransacao,
+  listTransacoes, getTransacaoById, createTransacaoComRecorrencia, updateTransacao, updateTransacaoComRecorrencia, deleteTransacao,
   deleteRecorrenciaGrupo,
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
@@ -121,6 +121,29 @@ export const appRouter = router({
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;
         return updateTransacao(id, { ...rest, ...(valor !== undefined ? { valor: String(valor) } : {}) });
+      }),
+    // Editar lançamento com geração de recorrência: requer permissão edit_lancamentos
+    updateComRecorrencia: permissionProcedure("edit_lancamentos")
+      .input(z.object({
+        id: z.number(),
+        descricao: z.string().min(1).max(255),
+        valor: z.number().positive(),
+        tipo: z.enum(["despesa", "receita"]),
+        status: z.enum(["pendente", "pago", "cancelado"]),
+        dataVencimento: z.string().optional(),
+        diaVencimento: z.number().min(1).max(31).optional(),
+        vencimentoTexto: z.string().optional(),
+        mes: z.number().min(1).max(12),
+        ano: z.number(),
+        categoriaId: z.number().nullable().optional(),
+        formaPagamento: z.string().optional(),
+        observacao: z.string().optional(),
+        recorrente: z.boolean(),
+        totalParcelas: z.number().min(1).max(360).nullable().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, valor, ...rest } = input;
+        return updateTransacaoComRecorrencia(id, { ...rest, valor: String(valor) });
       }),
     // Excluir lançamento: requer permissão delete_lancamentos
     delete: permissionProcedure("delete_lancamentos")

@@ -371,6 +371,147 @@ export async function updateTransacao(id: number, data: Partial<InsertTransacao>
   return result[0];
 }
 
+/**
+ * Atualiza uma transação e, se recorrente, gera as parcelas futuras a partir do mês seguinte.
+ * - recorrente=true + totalParcelas=null → Contrato Mensal: gera 24 meses à frente
+ * - recorrente=true + totalParcelas=N → Parcelado: gera N-1 parcelas futuras (a 1ª é a própria)
+ * - recorrente=false → apenas atualiza o registro
+ */
+export async function updateTransacaoComRecorrencia(id: number, data: {
+  descricao: string;
+  valor: string;
+  tipo: "despesa" | "receita";
+  status: "pendente" | "pago" | "cancelado";
+  dataVencimento?: string;
+  diaVencimento?: number;
+  vencimentoTexto?: string;
+  mes: number;
+  ano: number;
+  categoriaId?: number | null;
+  formaPagamento?: string;
+  observacao?: string;
+  recorrente: boolean;
+  totalParcelas?: number | null;
+}) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+
+  // Buscar o registro atual para saber o grupoId existente
+  const atual = await db.select().from(transacoes).where(eq(transacoes.id, id)).limit(1);
+  const registroAtual = atual[0];
+  if (!registroAtual) throw new Error("Transação não encontrada");
+
+  if (!data.recorrente) {
+    // Sem recorrência: apenas atualiza este registro e remove recorrência
+    const result = await db.update(transacoes).set({
+      descricao: data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      status: data.status,
+      dataVencimento: data.dataVencimento ?? null,
+      diaVencimento: data.diaVencimento ?? null,
+      vencimentoTexto: data.vencimentoTexto ?? null,
+      mes: data.mes,
+      ano: data.ano,
+      categoriaId: data.categoriaId ?? null,
+      formaPagamento: data.formaPagamento ?? null,
+      observacao: data.observacao ?? null,
+      recorrente: false,
+      recorrenciaGrupoId: null,
+      totalParcelas: null,
+      parcelaAtual: null,
+      updatedAt: new Date(),
+    }).where(eq(transacoes.id, id)).returning();
+    return { updated: result[0], created: [], grupoId: null };
+  }
+
+  // Recorrente: determinar grupoId (reutilizar existente ou criar novo)
+  const grupoId = registroAtual.recorrenciaGrupoId ?? randomUUID();
+
+  // Se já havia parcelas futuras deste grupo, deletar a partir do mês seguinte
+  if (registroAtual.recorrenciaGrupoId) {
+    const proximoMes = data.mes === 12 ? 1 : data.mes + 1;
+    const proximoAno = data.mes === 12 ? data.ano + 1 : data.ano;
+    await db.delete(transacoes).where(
+      and(
+        eq(transacoes.recorrenciaGrupoId, registroAtual.recorrenciaGrupoId),
+        sql`(${transacoes.ano} > ${data.ano} OR (${transacoes.ano} = ${data.ano} AND ${transacoes.mes} > ${data.mes}))`,
+        sql`${transacoes.id} != ${id}`
+      )
+    );
+  }
+
+  // Determinar quantos meses gerar à frente (excluindo o mês atual que já existe)
+  const mesesParaGerar = data.totalParcelas == null ? 24 : (data.totalParcelas - 1);
+
+  // Atualizar o registro atual (parcela 1)
+  await db.update(transacoes).set({
+    descricao: data.totalParcelas != null ? `${data.descricao} (1/${data.totalParcelas})` : data.descricao,
+    valor: data.valor,
+    tipo: data.tipo,
+    status: data.status,
+    dataVencimento: data.dataVencimento ?? null,
+    diaVencimento: data.diaVencimento ?? null,
+    vencimentoTexto: data.vencimentoTexto ?? null,
+    mes: data.mes,
+    ano: data.ano,
+    categoriaId: data.categoriaId ?? null,
+    formaPagamento: data.formaPagamento ?? null,
+    observacao: data.observacao ?? null,
+    recorrente: true,
+    recorrenciaGrupoId: grupoId,
+    totalParcelas: data.totalParcelas ?? null,
+    parcelaAtual: 1,
+    updatedAt: new Date(),
+  }).where(eq(transacoes.id, id));
+
+  // Gerar parcelas futuras
+  const registros: InsertTransacao[] = [];
+  for (let i = 1; i <= mesesParaGerar; i++) {
+    const totalMes = (data.mes - 1) + i;
+    const mesParcela = (totalMes % 12) + 1;
+    const anoParcela = data.ano + Math.floor(totalMes / 12);
+
+    let dataVencimentoParcela: string | null = null;
+    if (data.dataVencimento) {
+      const baseDate = new Date(data.dataVencimento + "T12:00:00");
+      const parcelaDate = new Date(baseDate);
+      parcelaDate.setMonth(baseDate.getMonth() + i);
+      const ultimoDia = new Date(parcelaDate.getFullYear(), parcelaDate.getMonth() + 1, 0).getDate();
+      if (parcelaDate.getDate() > ultimoDia) parcelaDate.setDate(ultimoDia);
+      dataVencimentoParcela = parcelaDate.toISOString().split("T")[0];
+    }
+
+    registros.push({
+      descricao: data.totalParcelas != null
+        ? `${data.descricao} (${i + 1}/${data.totalParcelas})`
+        : data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      status: "pendente",
+      dataVencimento: dataVencimentoParcela,
+      diaVencimento: data.diaVencimento ?? null,
+      vencimentoTexto: data.vencimentoTexto ?? null,
+      mes: mesParcela,
+      ano: anoParcela,
+      categoriaId: data.categoriaId ?? null,
+      formaPagamento: data.formaPagamento ?? null,
+      observacao: data.observacao ?? null,
+      recorrente: true,
+      recorrenciaGrupoId: grupoId,
+      totalParcelas: data.totalParcelas ?? null,
+      parcelaAtual: i + 1,
+    });
+  }
+
+  let created: InsertTransacao[] = [];
+  if (registros.length > 0) {
+    created = await db.insert(transacoes).values(registros).returning() as any;
+  }
+
+  return { updated: registroAtual, created, grupoId };
+}
+
 export async function deleteTransacao(id: number) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");

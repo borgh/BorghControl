@@ -231,59 +231,66 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
             </p>
           </div>
 
-          {/* Tipo de Recorrência — apenas na criação */}
-          {!isEdit && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">
-                <Repeat className="h-3.5 w-3.5" /> Tipo de Lançamento
-              </Label>
-              <div className="grid grid-cols-3 gap-2">
-                {(Object.entries(RECORRENCIA_LABELS) as [TipoRecorrencia, typeof RECORRENCIA_LABELS[TipoRecorrencia]][]).map(([key, info]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setTipoRecorrencia(key)}
-                    className={`rounded-lg border p-2.5 text-left transition-all ${
-                      tipoRecorrencia === key
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-border hover:border-muted-foreground/40"
-                    }`}
-                  >
-                    <div className={`mb-1 ${tipoRecorrencia === key ? "text-primary" : "text-muted-foreground"}`}>
-                      {info.icon}
-                    </div>
-                    <p className="text-xs font-semibold leading-tight">{info.label}</p>
-                    <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{info.desc}</p>
-                  </button>
-                ))}
-              </div>
-
-              {/* Campo de parcelas */}
-              {tipoRecorrencia === "parcelas" && (
-                <div className="space-y-1.5 pt-1">
-                  <Label>Número de Parcelas *</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      type="number" min="2" max="360"
-                      value={form.totalParcelas}
-                      onChange={(e) => f("totalParcelas", e.target.value)}
-                      className="w-28"
-                      required
-                    />
-                    <span className="text-sm text-muted-foreground">
-                      meses (a partir de {form.dataVencimento ? new Date(form.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"})
-                    </span>
+          {/* Tipo de Recorrência — aparece tanto na criação quanto na edição */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-1.5">
+              <Repeat className="h-3.5 w-3.5" /> Tipo de Lançamento
+            </Label>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.entries(RECORRENCIA_LABELS) as [TipoRecorrencia, typeof RECORRENCIA_LABELS[TipoRecorrencia]][]).map(([key, info]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTipoRecorrencia(key)}
+                  className={`rounded-lg border p-2.5 text-left transition-all ${
+                    tipoRecorrencia === key
+                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                      : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <div className={`mb-1 ${tipoRecorrencia === key ? "text-primary" : "text-muted-foreground"}`}>
+                    {info.icon}
                   </div>
-                </div>
-              )}
-
-              {tipoRecorrencia === "contrato" && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
-                  Serão gerados lançamentos para os próximos <strong>24 meses</strong>. Você pode excluir parcelas futuras a qualquer momento.
-                </div>
-              )}
+                  <p className="text-xs font-semibold leading-tight">{info.label}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{info.desc}</p>
+                </button>
+              ))}
             </div>
-          )}
+
+            {/* Campo de parcelas */}
+            {tipoRecorrencia === "parcelas" && (
+              <div className="space-y-1.5 pt-1">
+                <Label>Número de Parcelas *</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number" min="2" max="360"
+                    value={form.totalParcelas}
+                    onChange={(e) => f("totalParcelas", e.target.value)}
+                    className="w-28"
+                    required
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    meses (a partir de {form.dataVencimento ? new Date(form.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { month: "long", year: "numeric" }) : "—"})
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {tipoRecorrencia === "contrato" && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
+                {isEdit
+                  ? "Este lançamento faz parte de um contrato mensal permanente."
+                  : <>Serão gerados lançamentos para os próximos <strong>24 meses</strong>. Você pode excluir parcelas futuras a qualquer momento.</>
+                }
+              </div>
+            )}
+
+            {isEdit && tipoRecorrencia !== "unico" && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
+                Na edição, apenas <strong>este lançamento</strong> será alterado. Para alterar toda a série, edite cada parcela individualmente ou exclua e recrie.
+              </div>
+            )}
+          </div>
 
           {/* Categoria + Forma de Pagamento */}
           <div className="grid grid-cols-2 gap-3">

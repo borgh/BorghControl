@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const MESES = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 function RecorrenciaBadge({ item }: { item: any }) {
@@ -34,13 +34,14 @@ function RecorrenciaBadge({ item }: { item: any }) {
 
 export default function Despesas() {
   const hoje = new Date();
-  const [mes, setMes] = useState(String(hoje.getMonth() + 1));
-  const [ano, setAno] = useState(String(hoje.getFullYear()));
+  // Padrão: todos os meses e todos os anos (sem filtro de período)
+  const [mes, setMes] = useState("0");   // "0" = todos os meses
+  const [ano, setAno] = useState("0");   // "0" = todos os anos
   const [status, setStatus] = useState("todos");
   const [busca, setBusca] = useState("");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string; totalParcelas?: number | null } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string } | null>(null);
   const [deleteMode, setDeleteMode] = useState<"single" | "group">("single");
 
   const utils = trpc.useUtils();
@@ -51,7 +52,9 @@ export default function Despesas() {
   }, [anosData]);
 
   const { data, isLoading } = trpc.transacoes.list.useQuery({
-    tipo: "despesa", mes: Number(mes), ano: Number(ano),
+    tipo: "despesa",
+    mes: mes !== "0" ? Number(mes) : undefined,
+    ano: ano !== "0" ? Number(ano) : undefined,
     status: status !== "todos" ? status as any : undefined,
     busca: busca || undefined,
   });
@@ -81,7 +84,7 @@ export default function Despesas() {
   const totalPendente = items.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
 
   const handleDeleteClick = (item: any) => {
-    setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId, totalParcelas: item.totalParcelas });
+    setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
     setDeleteMode("single");
   };
 
@@ -116,9 +119,24 @@ export default function Despesas() {
 
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-3">
-        <Card className="bg-red-50 border-red-100"><CardContent className="p-4 text-center"><p className="text-xs text-red-600 font-medium uppercase tracking-wide">Total</p><p className="text-lg font-bold text-red-700">{fmt(total)}</p></CardContent></Card>
-        <Card className="bg-emerald-50 border-emerald-100"><CardContent className="p-4 text-center"><p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Pago</p><p className="text-lg font-bold text-emerald-700">{fmt(totalPago)}</p></CardContent></Card>
-        <Card className="bg-amber-50 border-amber-100"><CardContent className="p-4 text-center"><p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Pendente</p><p className="text-lg font-bold text-amber-700">{fmt(totalPendente)}</p></CardContent></Card>
+        <Card className="bg-red-50 border-red-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-red-600 font-medium uppercase tracking-wide">Total</p>
+            <p className="text-lg font-bold text-red-700">{fmt(total)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-emerald-50 border-emerald-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Pago</p>
+            <p className="text-lg font-bold text-emerald-700">{fmt(totalPago)}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-amber-50 border-amber-100">
+          <CardContent className="p-4 text-center">
+            <p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
+            <p className="text-lg font-bold text-amber-700">{fmt(totalPendente)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filtros */}
@@ -129,14 +147,23 @@ export default function Despesas() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9" />
             </div>
+            {/* Mês */}
             <Select value={mes} onValueChange={setMes}>
               <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>{MESES.slice(1).map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                <SelectItem value="0">Todos os meses</SelectItem>
+                {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+              </SelectContent>
             </Select>
+            {/* Ano */}
             <Select value={ano} onValueChange={setAno}>
-              <SelectTrigger className="w-24 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>{anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}</SelectContent>
+              <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Todos os anos</SelectItem>
+                {anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+              </SelectContent>
             </Select>
+            {/* Status */}
             <Select value={status} onValueChange={setStatus}>
               <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -163,49 +190,71 @@ export default function Despesas() {
             </div>
           ) : (
             <div className="divide-y divide-border">
-              {items.map((item: any) => (
-                <div key={item.id} className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors group">
-                  <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium truncate">{item.descricao}</p>
-                      <RecorrenciaBadge item={item} />
-                      {item.diaVencimento && !item.recorrente && (
-                        <span className="text-xs text-muted-foreground">dia {item.diaVencimento}</span>
-                      )}
+              {items.map((item: any) => {
+                const isPendente = item.status === "pendente";
+                const isCancelado = item.status === "cancelado";
+                return (
+                  <div
+                    key={item.id}
+                    className={`flex items-center gap-3 px-4 py-3 transition-colors group ${
+                      isPendente
+                        ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
+                        : isCancelado
+                          ? "bg-muted/20 hover:bg-muted/30 opacity-60"
+                          : "hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className={`text-sm font-medium truncate ${isPendente ? "text-amber-900" : ""}`}>{item.descricao}</p>
+                        <RecorrenciaBadge item={item} />
+                      </div>
+                      <p className={`text-xs ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                        {item.categoriaNome ?? "Sem categoria"}
+                        {item.formaPagamento ? ` · ${item.formaPagamento}` : ""}
+                        {item.dataVencimento
+                          ? ` · vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
+                          : item.diaVencimento ? ` · dia ${item.diaVencimento}` : ""}
+                        {` · ${MESES[item.mes]}/${item.ano}`}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {item.categoriaNome ?? "Sem categoria"}
-                      {item.formaPagamento ? ` · ${item.formaPagamento}` : ""}
-                      {item.dataVencimento ? ` · vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}` : item.diaVencimento ? ` · dia ${item.diaVencimento}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-semibold text-red-600">{fmt(Number(item.valor))}</span>
-                    <Badge variant="outline" className={`text-xs ${item.status === "pago" ? "badge-pago" : item.status === "cancelado" ? "badge-cancelado" : "badge-pendente"}`}>
-                      {item.status === "pago" ? "Pago" : item.status === "cancelado" ? "Cancelado" : "Pendente"}
-                    </Badge>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {item.status === "pendente" && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como pago">
-                          <Check className="h-3.5 w-3.5" />
-                        </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-sm font-semibold ${isPendente ? "text-amber-700" : "text-red-600"}`}>
+                        {fmt(Number(item.valor))}
+                      </span>
+                      {/* Badge de status com cor diferenciada para pendente */}
+                      {isPendente ? (
+                        <Badge className="text-xs bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100">
+                          Pendente
+                        </Badge>
+                      ) : isCancelado ? (
+                        <Badge variant="outline" className="text-xs text-muted-foreground">Cancelado</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">Pago</Badge>
                       )}
-                      {item.status === "pago" && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
-                          <RotateCcw className="h-3.5 w-3.5" />
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {isPendente && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como pago">
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {item.status === "pago" && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
+                          <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                      )}
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
@@ -213,31 +262,28 @@ export default function Despesas() {
 
       <TransacaoModal open={modal} onClose={() => setModal(false)} tipo="despesa" editItem={editItem} onSuccess={invalidate} />
 
-      {/* Dialog de exclusão — com opção de excluir grupo se for recorrente */}
+      {/* Dialog de exclusão */}
       <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir despesa?</AlertDialogTitle>
             <AlertDialogDescription>
-              {hasGroup ? (
-                <span>Esta despesa faz parte de uma série recorrente. Escolha como deseja excluir:</span>
-              ) : (
-                <span>Esta ação não pode ser desfeita.</span>
-              )}
+              {hasGroup
+                ? "Esta despesa faz parte de uma série recorrente. Escolha como deseja excluir:"
+                : "Esta ação não pode ser desfeita."}
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           {hasGroup && (
             <div className="flex flex-col gap-2 py-2">
               <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
-                <input type="radio" name="deleteMode" checked={deleteMode === "single"} onChange={() => setDeleteMode("single")} className="mt-0.5" />
+                <input type="radio" name="deleteModeDespesa" checked={deleteMode === "single"} onChange={() => setDeleteMode("single")} className="mt-0.5" />
                 <div>
                   <p className="text-sm font-medium">Apenas este lançamento</p>
                   <p className="text-xs text-muted-foreground">Remove somente esta parcela, mantendo as demais.</p>
                 </div>
               </label>
               <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
-                <input type="radio" name="deleteMode" checked={deleteMode === "group"} onChange={() => setDeleteMode("group")} className="mt-0.5" />
+                <input type="radio" name="deleteModeDespesa" checked={deleteMode === "group"} onChange={() => setDeleteMode("group")} className="mt-0.5" />
                 <div>
                   <p className="text-sm font-medium">Toda a série</p>
                   <p className="text-xs text-muted-foreground">Remove todos os lançamentos desta série recorrente.</p>
@@ -245,7 +291,6 @@ export default function Despesas() {
               </label>
             </div>
           )}
-
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">

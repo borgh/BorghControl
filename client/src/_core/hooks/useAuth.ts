@@ -2,25 +2,16 @@ import { trpc } from "@/lib/trpc";
 import { useCallback } from "react";
 
 export function useAuth() {
-  const utils = trpc.useUtils();
-  const { data: user, isLoading: loading, error } = trpc.auth.me.useQuery();
-
+  const { data: user, isLoading, error } = trpc.auth.me.useQuery(undefined, { retry: false });
   const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: () => {
-      utils.auth.me.invalidate();
-    },
+    onSuccess: () => { window.location.href = "/login"; },
   });
-
-  const logout = useCallback(() => {
-    logoutMutation.mutate();
-  }, [logoutMutation]);
-
+  const logout = useCallback(() => logoutMutation.mutate(), [logoutMutation]);
   return {
     user: user ?? null,
-    loading,
+    loading: isLoading,
     error,
     isAuthenticated: !!user,
     logout,
-    refresh: () => utils.auth.me.invalidate(),
   };
 }

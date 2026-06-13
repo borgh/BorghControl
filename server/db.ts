@@ -1,214 +1,263 @@
-import { eq, sql, count } from "drizzle-orm";
+import { eq, and, desc, sql, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import {
-  InsertUser,
-  users,
-  vagas,
-  apartamentos,
-  sorteios,
-  InsertVaga,
-  InsertApartamento,
-  InsertSorteio,
-  Vaga,
-  Apartamento,
-  Sorteio,
-  User,
-} from "../drizzle/schema";
-import { ENV } from "./_core/env";
+import { users, categorias, transacoes, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
-    const dbUrl = process.env.DATABASE_URL;
-    const isPostgres = dbUrl.startsWith('postgresql://') || dbUrl.startsWith('postgres://');
-    if (!isPostgres) {
-      // Não é PostgreSQL — banco local MySQL/TiDB da plataforma Manus
-      return null;
-    }
+    const url = process.env.DATABASE_URL;
+    const isPostgres = url.startsWith("postgresql://") || url.startsWith("postgres://");
+    if (!isPostgres) return null;
     try {
-      const sslConfigs: any[] = [{ rejectUnauthorized: false }, false];
-      for (const ssl of sslConfigs) {
-        try {
-          _pool = new Pool({ connectionString: dbUrl, ssl });
-          await _pool.query('SELECT 1');
-          _db = drizzle(_pool);
-          break;
-        } catch (e: any) {
-          await _pool?.end().catch(() => {});
-          _pool = null;
-          if (e?.message?.includes('SSL') || e?.code === 'ECONNREFUSED') continue;
-          throw e;
-        }
-      }
+      const ssl = { rejectUnauthorized: false };
+      _pool = new Pool({ connectionString: url, ssl });
+      _db = drizzle(_pool);
     } catch (error) {
-      console.warn("[Database] Failed to connect:", error);
-      _db = null;
+      console.warn("[DB] Failed to connect:", error);
     }
   }
   return _db;
 }
 
-// ─── Users ───────────────────────────────────────────────────────────────────
-
-export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) throw new Error("User openId is required for upsert");
+export async function getUserByEmail(email: string) {
   const db = await getDb();
-  if (!db) return;
-
-  const existing = await db.select().from(users).where(eq(users.openId, user.openId)).limit(1);
-  if (existing.length > 0) {
-    const updateData: Partial<InsertUser> = { lastSignedIn: new Date(), updatedAt: new Date() };
-    if (user.name !== undefined) updateData.name = user.name;
-    if (user.email !== undefined) updateData.email = user.email;
-    if (user.loginMethod !== undefined) updateData.loginMethod = user.loginMethod;
-    if (user.role !== undefined) updateData.role = user.role;
-    if (user.passwordHash !== undefined) updateData.passwordHash = user.passwordHash;
-    await db.update(users).set(updateData).where(eq(users.openId, user.openId));
-  } else {
-    const allUsers = await db.select({ id: users.id }).from(users).limit(1);
-    const role = allUsers.length === 0 && user.openId === ENV.ownerOpenId ? "admin" : (user.role ?? "user");
-    await db.insert(users).values({
-      ...user,
-      role,
-      lastSignedIn: user.lastSignedIn ?? new Date(),
-      updatedAt: new Date(),
-    });
-  }
+  if (!db) return undefined;
+  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  return result[0];
 }
 
-export async function getUserByOpenId(openId: string): Promise<User | undefined> {
+export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
 
-// ─── Vagas ───────────────────────────────────────────────────────────────────
-
-export async function listVagas(): Promise<Vaga[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(vagas).orderBy(vagas.numero);
-}
-
-export async function listVagasAtivas(): Promise<Vaga[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(vagas).where(eq(vagas.status, "ativa")).orderBy(vagas.numero);
-}
-
-export async function getVagaById(id: number): Promise<Vaga | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(vagas).where(eq(vagas.id, id)).limit(1);
-  return result[0];
-}
-
-export async function createVaga(data: InsertVaga): Promise<Vaga> {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(vagas).values(data).returning();
-  return result[0]!;
-}
-
-export async function updateVaga(id: number, data: Partial<InsertVaga>): Promise<Vaga | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.update(vagas).set({ ...data, updatedAt: new Date() }).where(eq(vagas.id, id)).returning();
-  return result[0];
-}
-
-export async function deleteVaga(id: number): Promise<void> {
+export async function upsertUser(user: InsertUser): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  await db.delete(vagas).where(eq(vagas.id, id));
+  try {
+    await db.insert(users).values(user).onConflictDoUpdate({
+      target: users.openId,
+      set: { name: user.name, email: user.email, lastSignedIn: new Date(), updatedAt: new Date() },
+    });
+  } catch (err) {
+    console.error("[DB] upsertUser error:", err);
+    throw err;
+  }
 }
 
-// ─── Apartamentos ─────────────────────────────────────────────────────────────
-
-export async function listApartamentos(): Promise<Apartamento[]> {
+export async function createUser(data: InsertUser) {
   const db = await getDb();
-  if (!db) return [];
-  return db.select().from(apartamentos).orderBy(apartamentos.bloco, apartamentos.numero);
-}
-
-export async function listApartamentosParticipantes(): Promise<Apartamento[]> {
-  const db = await getDb();
-  if (!db) return [];
-  return db.select().from(apartamentos).where(eq(apartamentos.status, "participante")).orderBy(apartamentos.bloco, apartamentos.numero);
-}
-
-export async function getApartamentoById(id: number): Promise<Apartamento | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(apartamentos).where(eq(apartamentos.id, id)).limit(1);
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.insert(users).values(data).returning();
   return result[0];
 }
 
-export async function createApartamento(data: InsertApartamento): Promise<Apartamento> {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(apartamentos).values(data).returning();
-  return result[0]!;
-}
-
-export async function updateApartamento(id: number, data: Partial<InsertApartamento>): Promise<Apartamento | undefined> {
-  const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.update(apartamentos).set({ ...data, updatedAt: new Date() }).where(eq(apartamentos.id, id)).returning();
-  return result[0];
-}
-
-export async function deleteApartamento(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) return;
-  await db.delete(apartamentos).where(eq(apartamentos.id, id));
-}
-
-// ─── Sorteios ─────────────────────────────────────────────────────────────────
-
-export async function createSorteio(data: InsertSorteio): Promise<Sorteio> {
-  const db = await getDb();
-  if (!db) throw new Error("DB not available");
-  const result = await db.insert(sorteios).values(data).returning();
-  return result[0]!;
-}
-
-export async function listSorteios(): Promise<Sorteio[]> {
+export async function listCategorias(tipo?: "despesa" | "receita") {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(sorteios).orderBy(sql`${sorteios.realizadoEm} DESC`);
+  if (tipo) return db.select().from(categorias).where(eq(categorias.tipo, tipo)).orderBy(categorias.nome);
+  return db.select().from(categorias).orderBy(categorias.tipo, categorias.nome);
 }
 
-export async function getSorteioById(id: number): Promise<Sorteio | undefined> {
+export async function createCategoria(data: InsertCategoria) {
   const db = await getDb();
-  if (!db) return undefined;
-  const result = await db.select().from(sorteios).where(eq(sorteios.id, id)).limit(1);
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.insert(categorias).values(data).returning();
   return result[0];
 }
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+export async function updateCategoria(id: number, data: Partial<InsertCategoria>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.update(categorias).set(data).where(eq(categorias.id, id)).returning();
+  return result[0];
+}
+
+export async function deleteCategoria(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(categorias).where(eq(categorias.id, id));
+}
+
+export async function listTransacoes(params: {
+  mes?: number; ano?: number; tipo?: "despesa" | "receita";
+  status?: "pendente" | "pago" | "cancelado"; busca?: string;
+  limit?: number; offset?: number;
+}) {
+  const db = await getDb();
+  if (!db) return { items: [], total: 0 };
+  const conditions: any[] = [];
+  if (params.mes) conditions.push(eq(transacoes.mes, params.mes));
+  if (params.ano) conditions.push(eq(transacoes.ano, params.ano));
+  if (params.tipo) conditions.push(eq(transacoes.tipo, params.tipo));
+  if (params.status) conditions.push(eq(transacoes.status, params.status));
+  if (params.busca) conditions.push(ilike(transacoes.descricao, `%${params.busca}%`));
+  const where = conditions.length > 0 ? and(...conditions) : undefined;
+  const limit = params.limit ?? 100;
+  const offset = params.offset ?? 0;
+  const [items, countResult] = await Promise.all([
+    db.select({
+      id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
+      tipo: transacoes.tipo, status: transacoes.status, vencimentoTexto: transacoes.vencimentoTexto,
+      diaVencimento: transacoes.diaVencimento, mes: transacoes.mes, ano: transacoes.ano,
+      categoriaId: transacoes.categoriaId, formaPagamento: transacoes.formaPagamento,
+      observacao: transacoes.observacao, recorrente: transacoes.recorrente,
+      createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
+      categoriaNome: categorias.nome, categoriaCor: categorias.cor, categoriaIcone: categorias.icone,
+    })
+      .from(transacoes)
+      .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+      .where(where)
+      .orderBy(transacoes.diaVencimento, transacoes.id)
+      .limit(limit).offset(offset),
+    db.select({ count: sql<number>`count(*)` }).from(transacoes).where(where),
+  ]);
+  return { items, total: Number(countResult[0]?.count ?? 0) };
+}
+
+export async function getTransacaoById(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select({
+    id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
+    tipo: transacoes.tipo, status: transacoes.status, vencimentoTexto: transacoes.vencimentoTexto,
+    diaVencimento: transacoes.diaVencimento, mes: transacoes.mes, ano: transacoes.ano,
+    categoriaId: transacoes.categoriaId, formaPagamento: transacoes.formaPagamento,
+    observacao: transacoes.observacao, recorrente: transacoes.recorrente,
+    createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
+    categoriaNome: categorias.nome, categoriaCor: categorias.cor,
+  })
+    .from(transacoes)
+    .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+    .where(eq(transacoes.id, id)).limit(1);
+  return result[0];
+}
+
+export async function createTransacao(data: InsertTransacao) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.insert(transacoes).values(data).returning();
+  return result[0];
+}
+
+export async function updateTransacao(id: number, data: Partial<InsertTransacao>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const result = await db.update(transacoes).set({ ...data, updatedAt: new Date() }).where(eq(transacoes.id, id)).returning();
+  return result[0];
+}
+
+export async function deleteTransacao(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(transacoes).where(eq(transacoes.id, id));
+}
+
+export async function getResumoMensal(mes: number, ano: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select({
+    tipo: transacoes.tipo, status: transacoes.status,
+    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano))).groupBy(transacoes.tipo, transacoes.status);
+  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0;
+  for (const row of result) {
+    const v = Number(row.totalValor);
+    if (row.tipo === "receita") totalReceitas += v;
+    if (row.tipo === "despesa") totalDespesas += v;
+    if (row.status === "pago") totalPago += v;
+    if (row.status === "pendente") totalPendente += v;
+  }
+  return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, saldo: totalReceitas - totalDespesas };
+}
+
+export async function getResumoAnual(ano: number) {
+  const db = await getDb();
+  if (!db) return [];
+  const result = await db.select({
+    mes: transacoes.mes, tipo: transacoes.tipo,
+    total: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(eq(transacoes.ano, ano)).groupBy(transacoes.mes, transacoes.tipo).orderBy(transacoes.mes);
+  const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, receitas: 0, despesas: 0, saldo: 0 }));
+  for (const row of result) {
+    const idx = row.mes - 1;
+    if (row.tipo === "receita") meses[idx].receitas += Number(row.total);
+    if (row.tipo === "despesa") meses[idx].despesas += Number(row.total);
+  }
+  for (const m of meses) m.saldo = m.receitas - m.despesas;
+  return meses;
+}
+
+export async function getDespesasPorCategoria(mes: number, ano: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    categoriaId: transacoes.categoriaId, categoriaNome: categorias.nome, categoriaCor: categorias.cor,
+    total: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  })
+    .from(transacoes)
+    .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+    .where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.tipo, "despesa")))
+    .groupBy(transacoes.categoriaId, categorias.nome, categorias.cor)
+    .orderBy(sql`SUM(CAST(${transacoes.valor} AS NUMERIC)) DESC`);
+}
+
+export async function getProximosVencimentos(diasAfrente = 7) {
+  const db = await getDb();
+  if (!db) return [];
+  const hoje = new Date();
+  const mes = hoje.getMonth() + 1;
+  const ano = hoje.getFullYear();
+  const diaAtual = hoje.getDate();
+  const diaLimite = diaAtual + diasAfrente;
+  return db.select({
+    id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
+    tipo: transacoes.tipo, diaVencimento: transacoes.diaVencimento, vencimentoTexto: transacoes.vencimentoTexto,
+    mes: transacoes.mes, ano: transacoes.ano, status: transacoes.status,
+    categoriaNome: categorias.nome, categoriaCor: categorias.cor,
+  })
+    .from(transacoes)
+    .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+    .where(and(
+      eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.status, "pendente"),
+      sql`${transacoes.diaVencimento} >= ${diaAtual}`,
+      sql`${transacoes.diaVencimento} <= ${diaLimite}`
+    ))
+    .orderBy(transacoes.diaVencimento).limit(10);
+}
 
 export async function getDashboardStats() {
   const db = await getDb();
-  if (!db) return { totalVagas: 0, vagasAtivas: 0, totalApartamentos: 0, apartamentosParticipantes: 0, totalSorteios: 0 };
-
-  const [totalVagasRes, vagasAtivasRes, totalAptRes, aptPartRes, totalSorteiosRes] = await Promise.all([
-    db.select({ count: count() }).from(vagas),
-    db.select({ count: count() }).from(vagas).where(eq(vagas.status, "ativa")),
-    db.select({ count: count() }).from(apartamentos),
-    db.select({ count: count() }).from(apartamentos).where(eq(apartamentos.status, "participante")),
-    db.select({ count: count() }).from(sorteios),
+  if (!db) return null;
+  const hoje = new Date();
+  const mes = hoje.getMonth() + 1;
+  const ano = hoje.getFullYear();
+  const [resumo, porCategoria, anuais, vencimentos] = await Promise.all([
+    getResumoMensal(mes, ano),
+    getDespesasPorCategoria(mes, ano),
+    getResumoAnual(ano),
+    getProximosVencimentos(7),
   ]);
+  const totais = await db.select({
+    tipo: transacoes.tipo, status: transacoes.status, count: sql<number>`COUNT(*)`,
+  }).from(transacoes).where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano))).groupBy(transacoes.tipo, transacoes.status);
+  let contDespesas = 0, contReceitas = 0, contPendentes = 0;
+  for (const t of totais) {
+    if (t.tipo === "despesa") contDespesas += Number(t.count);
+    if (t.tipo === "receita") contReceitas += Number(t.count);
+    if (t.status === "pendente") contPendentes += Number(t.count);
+  }
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentos: vencimentos, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
+}
 
-  return {
-    totalVagas: Number(totalVagasRes[0]?.count ?? 0),
-    vagasAtivas: Number(vagasAtivasRes[0]?.count ?? 0),
-    totalApartamentos: Number(totalAptRes[0]?.count ?? 0),
-    apartamentosParticipantes: Number(aptPartRes[0]?.count ?? 0),
-    totalSorteios: Number(totalSorteiosRes[0]?.count ?? 0),
-  };
+export async function getAnosDisponiveis() {
+  const db = await getDb();
+  if (!db) return [new Date().getFullYear()];
+  const result = await db.selectDistinct({ ano: transacoes.ano }).from(transacoes).orderBy(desc(transacoes.ano));
+  return result.map((r) => r.ano);
 }

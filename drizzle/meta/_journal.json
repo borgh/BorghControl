@@ -1,26 +1,12 @@
 {
   "version": "7",
-  "dialect": "mysql",
+  "dialect": "postgresql",
   "entries": [
     {
       "idx": 0,
-      "version": "5",
-      "when": 1780339357292,
-      "tag": "0000_acoustic_bloodstorm",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "5",
-      "when": 1780339489993,
-      "tag": "0001_clammy_madelyne_pryor",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "5",
-      "when": 1780343399123,
-      "tag": "0002_bent_magdalene",
+      "version": "7",
+      "when": 1781344406771,
+      "tag": "0000_dazzling_prima",
       "breakpoints": true
     }
   ]

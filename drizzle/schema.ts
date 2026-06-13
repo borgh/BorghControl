@@ -5,21 +5,25 @@ import {
   text,
   timestamp,
   varchar,
-  json,
+  decimal,
+  boolean,
+  index,
   serial,
 } from "drizzle-orm/pg-core";
 
+// ─── Enums ────────────────────────────────────────────────────────────────────
 export const roleEnum = pgEnum("role", ["user", "admin"]);
-export const vagaStatusEnum = pgEnum("vaga_status", ["ativa", "inativa"]);
-export const aptStatusEnum = pgEnum("apt_status", ["participante", "nao_participante"]);
+export const tipoTransacaoEnum = pgEnum("tipo_transacao", ["despesa", "receita"]);
+export const statusTransacaoEnum = pgEnum("status_transacao", ["pendente", "pago", "cancelado"]);
 
+// ─── Usuários ─────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  loginMethod: varchar("loginMethod", { length: 64 }),
   role: roleEnum("role").default("user").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
@@ -29,58 +33,45 @@ export const users = pgTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// ─── Vagas de Garagem ────────────────────────────────────────────────────────
-
-export const vagas = pgTable("vagas", {
+// ─── Categorias ───────────────────────────────────────────────────────────────
+export const categorias = pgTable("categorias", {
   id: serial("id").primaryKey(),
-  numero: varchar("numero", { length: 20 }).notNull(),
-  descricao: text("descricao"),
-  status: vagaStatusEnum("status").default("ativa").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
-
-export type Vaga = typeof vagas.$inferSelect;
-export type InsertVaga = typeof vagas.$inferInsert;
-
-// ─── Apartamentos ────────────────────────────────────────────────────────────
-
-export const apartamentos = pgTable("apartamentos", {
-  id: serial("id").primaryKey(),
-  numero: varchar("numero", { length: 20 }).notNull(),
-  bloco: varchar("bloco", { length: 20 }),
-  responsavel: varchar("responsavel", { length: 120 }),
-  status: aptStatusEnum("status").default("participante").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
-});
-
-export type Apartamento = typeof apartamentos.$inferSelect;
-export type InsertApartamento = typeof apartamentos.$inferInsert;
-
-// ─── Sorteios ────────────────────────────────────────────────────────────────
-
-export const sorteios = pgTable("sorteios", {
-  id: serial("id").primaryKey(),
-  realizadoEm: timestamp("realizadoEm").defaultNow().notNull(),
-  totalParticipantes: integer("totalParticipantes").notNull(),
-  totalVagas: integer("totalVagas").notNull(),
-  responsavelId: integer("responsavelId"),
-  responsavelNome: varchar("responsavelNome", { length: 120 }),
-  // JSON array of { apartamentoId, apartamentoNumero, apartamentoBloco, vagaId, vagaNumero }
-  resultado: json("resultado").notNull(),
+  nome: varchar("nome", { length: 100 }).notNull(),
+  tipo: tipoTransacaoEnum("tipo").notNull(),
+  cor: varchar("cor", { length: 7 }).default("#6366f1"),
+  icone: varchar("icone", { length: 50 }).default("tag"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
-export type Sorteio = typeof sorteios.$inferSelect;
-export type InsertSorteio = typeof sorteios.$inferInsert;
+export type Categoria = typeof categorias.$inferSelect;
+export type InsertCategoria = typeof categorias.$inferInsert;
 
-export type ResultadoItem = {
-  apartamentoId: number;
-  apartamentoNumero: string;
-  apartamentoBloco: string | null;
-  apartamentoResponsavel: string | null;
-  vagaId: number;
-  vagaNumero: string;
-  vagaDescricao: string | null;
-};
+// ─── Transações (despesas e receitas) ─────────────────────────────────────────
+export const transacoes = pgTable(
+  "transacoes",
+  {
+    id: serial("id").primaryKey(),
+    descricao: varchar("descricao", { length: 255 }).notNull(),
+    valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
+    tipo: tipoTransacaoEnum("tipo").notNull(),
+    status: statusTransacaoEnum("status").default("pendente").notNull(),
+    vencimentoTexto: varchar("vencimentoTexto", { length: 20 }), // ex: "DIA 10"
+    diaVencimento: integer("diaVencimento"), // número do dia 1-31
+    mes: integer("mes").notNull(), // 1-12
+    ano: integer("ano").notNull(), // ex: 2025
+    categoriaId: integer("categoriaId"),
+    formaPagamento: varchar("formaPagamento", { length: 50 }),
+    observacao: text("observacao"),
+    recorrente: boolean("recorrente").default(false),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    idxMesAno: index("idx_mes_ano").on(table.mes, table.ano),
+    idxTipo: index("idx_tipo").on(table.tipo),
+    idxStatus: index("idx_status").on(table.status),
+  })
+);
+
+export type Transacao = typeof transacoes.$inferSelect;
+export type InsertTransacao = typeof transacoes.$inferInsert;

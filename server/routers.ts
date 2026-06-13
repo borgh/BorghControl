@@ -1,307 +1,94 @@
 import { z } from "zod";
+import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
-import { loginUser, registerUser, clearSessionCookie, setSessionCookie } from "./auth";
+import { loginUser, registerUser, COOKIE_NAME } from "./auth";
 import {
-  listVagas,
-  getVagaById,
-  createVaga,
-  updateVaga,
-  deleteVaga,
-  listVagasAtivas,
-  listApartamentos,
-  getApartamentoById,
-  createApartamento,
-  updateApartamento,
-  deleteApartamento,
-  listApartamentosParticipantes,
-  createSorteio,
-  listSorteios,
-  getSorteioById,
-  getDashboardStats,
+  listCategorias, createCategoria, updateCategoria, deleteCategoria,
+  listTransacoes, getTransacaoById, createTransacao, updateTransacao, deleteTransacao,
+  getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
+  getDashboardStats, getAnosDisponiveis,
 } from "./db";
-import { ResultadoItem } from "../drizzle/schema";
-import { TRPCError } from "@trpc/server";
-
-// ─── Algoritmo de sorteio criptograficamente seguro ──────────────────────────
-
-function cryptoRandom(): number {
-  const array = new Uint32Array(1);
-  crypto.getRandomValues(array);
-  return array[0]! / (0xffffffff + 1);
-}
-
-function fisherYatesShuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(cryptoRandom() * (i + 1));
-    [a[i], a[j]] = [a[j]!, a[i]!];
-  }
-  return a;
-}
-
-// ─── Routers ─────────────────────────────────────────────────────────────────
-
-const vagasRouter = router({
-  list: protectedProcedure.query(async () => {
-    return listVagas();
-  }),
-
-  listAtivas: protectedProcedure.query(async () => {
-    return listVagasAtivas();
-  }),
-
-  create: protectedProcedure
-    .input(
-      z.object({
-        numero: z.string().min(1).max(20),
-        descricao: z.string().max(500).optional(),
-        status: z.enum(["ativa", "inativa"]).default("ativa"),
-      })
-    )
-    .mutation(async ({ input }) => {
-      await createVaga(input);
-      return { success: true };
-    }),
-
-  update: protectedProcedure
-    .input(
-      z.object({
-        id: z.number().int().positive(),
-        numero: z.string().min(1).max(20).optional(),
-        descricao: z.string().max(500).nullable().optional(),
-        status: z.enum(["ativa", "inativa"]).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const { id, ...data } = input;
-      await updateVaga(id, data);
-      return { success: true };
-    }),
-
-  delete: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
-      await deleteVaga(input.id);
-      return { success: true };
-    }),
-
-  toggleStatus: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
-      const vaga = await getVagaById(input.id);
-      if (!vaga) throw new TRPCError({ code: "NOT_FOUND", message: "Vaga não encontrada" });
-      await updateVaga(input.id, { status: vaga.status === "ativa" ? "inativa" : "ativa" });
-      return { success: true };
-    }),
-});
-
-const apartamentosRouter = router({
-  list: protectedProcedure.query(async () => {
-    return listApartamentos();
-  }),
-
-  listParticipantes: protectedProcedure.query(async () => {
-    return listApartamentosParticipantes();
-  }),
-
-  create: protectedProcedure
-    .input(
-      z.object({
-        numero: z.string().min(1).max(20),
-        bloco: z.string().max(20).optional(),
-        responsavel: z.string().max(120).optional(),
-        status: z.enum(["participante", "nao_participante"]).default("participante"),
-      })
-    )
-    .mutation(async ({ input }) => {
-      await createApartamento(input);
-      return { success: true };
-    }),
-
-  update: protectedProcedure
-    .input(
-      z.object({
-        id: z.number().int().positive(),
-        numero: z.string().min(1).max(20).optional(),
-        bloco: z.string().max(20).nullable().optional(),
-        responsavel: z.string().max(120).nullable().optional(),
-        status: z.enum(["participante", "nao_participante"]).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      const { id, ...data } = input;
-      await updateApartamento(id, data);
-      return { success: true };
-    }),
-
-  delete: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
-      await deleteApartamento(input.id);
-      return { success: true };
-    }),
-
-  toggleStatus: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .mutation(async ({ input }) => {
-      const apt = await getApartamentoById(input.id);
-      if (!apt) throw new TRPCError({ code: "NOT_FOUND", message: "Apartamento não encontrado" });
-      await updateApartamento(input.id, {
-        status: apt.status === "participante" ? "nao_participante" : "participante",
-      });
-      return { success: true };
-    }),
-});
-
-const sorteioRouter = router({
-  realizarSorteio: protectedProcedure.mutation(async ({ ctx }) => {
-    const [participantes, vagasDisponiveis] = await Promise.all([
-      listApartamentosParticipantes(),
-      listVagasAtivas(),
-    ]);
-
-    if (participantes.length === 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Nenhum apartamento participante cadastrado.",
-      });
-    }
-    if (vagasDisponiveis.length === 0) {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Nenhuma vaga ativa cadastrada.",
-      });
-    }
-
-    // Embaralha ambas as listas com algoritmo criptograficamente seguro
-    const aptsEmbaralhados = fisherYatesShuffle(participantes);
-    const vagasEmbaralhadas = fisherYatesShuffle(vagasDisponiveis);
-
-    const pares = Math.min(aptsEmbaralhados.length, vagasEmbaralhadas.length);
-    const resultado: ResultadoItem[] = [];
-
-    for (let i = 0; i < pares; i++) {
-      const apt = aptsEmbaralhados[i]!;
-      const vaga = vagasEmbaralhadas[i]!;
-      resultado.push({
-        apartamentoId: apt.id,
-        apartamentoNumero: apt.numero,
-        apartamentoBloco: apt.bloco ?? null,
-        apartamentoResponsavel: apt.responsavel ?? null,
-        vagaId: vaga.id,
-        vagaNumero: vaga.numero,
-        vagaDescricao: vaga.descricao ?? null,
-      });
-    }
-
-    // Ordena resultado por bloco e número do apartamento
-    resultado.sort((a, b) => {
-      const blocoA = a.apartamentoBloco ?? "";
-      const blocoB = b.apartamentoBloco ?? "";
-      if (blocoA !== blocoB) return blocoA.localeCompare(blocoB);
-      return a.apartamentoNumero.localeCompare(b.apartamentoNumero, undefined, { numeric: true });
-    });
-
-    const insertResult = await createSorteio({
-      totalParticipantes: participantes.length,
-      totalVagas: vagasDisponiveis.length,
-      responsavelId: ctx.user.id,
-      responsavelNome: ctx.user.name ?? ctx.user.email ?? "Usuário",
-      resultado: resultado as unknown as Record<string, unknown>[],
-      realizadoEm: new Date(),
-    });
-
-    // Recupera ID inserido de forma determinística
-    const insertId = (insertResult as any).insertId as number;
-
-    return {
-      id: insertId,
-      resultado,
-      totalParticipantes: participantes.length,
-      totalVagas: vagasDisponiveis.length,
-      responsavelNome: ctx.user.name ?? ctx.user.email ?? "Usuário",
-      realizadoEm: new Date(),
-    };
-  }),
-
-  getResultado: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      const sorteio = await getSorteioById(input.id);
-      if (!sorteio) throw new TRPCError({ code: "NOT_FOUND", message: "Sorteio não encontrado" });
-      return sorteio;
-    }),
-
-  previewSorteio: protectedProcedure.query(async () => {
-    const [participantes, vagasDisponiveis] = await Promise.all([
-      listApartamentosParticipantes(),
-      listVagasAtivas(),
-    ]);
-    return {
-      totalParticipantes: participantes.length,
-      totalVagas: vagasDisponiveis.length,
-      podeRealizar: participantes.length > 0 && vagasDisponiveis.length > 0,
-    };
-  }),
-});
-
-const historicoRouter = router({
-  list: protectedProcedure.query(async () => {
-    return listSorteios();
-  }),
-
-  getById: protectedProcedure
-    .input(z.object({ id: z.number().int().positive() }))
-    .query(async ({ input }) => {
-      const sorteio = await getSorteioById(input.id);
-      if (!sorteio) throw new TRPCError({ code: "NOT_FOUND", message: "Sorteio não encontrado" });
-      return sorteio;
-    }),
-});
-
-const dashboardRouter = router({
-  stats: protectedProcedure.query(async () => {
-    return getDashboardStats();
-  }),
-});
 
 export const appRouter = router({
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
+    register: publicProcedure
+      .input(z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().min(6) }))
+      .mutation(async ({ input, ctx }) => {
+        const { token, user } = await registerUser(input.name, input.email, input.password);
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+        return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+      }),
+    login: publicProcedure
+      .input(z.object({ email: z.string().email(), password: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        const { token, user } = await loginUser(input.email, input.password);
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
+        return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };
+      }),
     logout: publicProcedure.mutation(({ ctx }) => {
-      clearSessionCookie(ctx.req, ctx.res);
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
-    login: publicProcedure
-      .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => {
-        try {
-          const { user, token } = await loginUser(input.email, input.password);
-          setSessionCookie(ctx.req, ctx.res, token);
-          return { success: true, user };
-        } catch (e: any) {
-          throw new TRPCError({ code: "UNAUTHORIZED", message: e.message ?? "Credenciais inválidas" });
-        }
-      }),
-    register: publicProcedure
-      .input(z.object({ email: z.string().email(), password: z.string().min(6), name: z.string().min(1) }))
-      .mutation(async ({ input, ctx }) => {
-        try {
-          const { user, token } = await registerUser(input.email, input.password, input.name);
-          setSessionCookie(ctx.req, ctx.res, token);
-          return { success: true, user };
-        } catch (e: any) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: e.message ?? "Erro ao registrar" });
-        }
-      }),
   }),
-  vagas: vagasRouter,
-  apartamentos: apartamentosRouter,
-  sorteio: sorteioRouter,
-  historico: historicoRouter,
-  dashboard: dashboardRouter,
+  categorias: router({
+    list: publicProcedure
+      .input(z.object({ tipo: z.enum(["despesa", "receita"]).optional() }).optional())
+      .query(async ({ input }) => listCategorias(input?.tipo)),
+    create: protectedProcedure
+      .input(z.object({ nome: z.string().min(1).max(100), tipo: z.enum(["despesa", "receita"]), cor: z.string().optional(), icone: z.string().optional() }))
+      .mutation(async ({ input }) => createCategoria(input)),
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), nome: z.string().min(1).max(100).optional(), cor: z.string().optional(), icone: z.string().optional() }))
+      .mutation(async ({ input }) => { const { id, ...data } = input; return updateCategoria(id, data); }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => { await deleteCategoria(input.id); return { success: true }; }),
+  }),
+  transacoes: router({
+    list: publicProcedure
+      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional() }).optional())
+      .query(async ({ input }) => listTransacoes(input ?? {})),
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => getTransacaoById(input.id)),
+    create: protectedProcedure
+      .input(z.object({ descricao: z.string().min(1).max(255), valor: z.number().positive(), tipo: z.enum(["despesa", "receita"]), status: z.enum(["pendente", "pago", "cancelado"]).optional(), vencimentoTexto: z.string().optional(), diaVencimento: z.number().min(1).max(31).optional(), mes: z.number().min(1).max(12), ano: z.number(), categoriaId: z.number().optional(), formaPagamento: z.string().optional(), observacao: z.string().optional(), recorrente: z.boolean().optional() }))
+      .mutation(async ({ input }) => createTransacao({ ...input, valor: String(input.valor) })),
+    update: protectedProcedure
+      .input(z.object({ id: z.number(), descricao: z.string().min(1).max(255).optional(), valor: z.number().positive().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), vencimentoTexto: z.string().optional(), diaVencimento: z.number().min(1).max(31).optional(), mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), categoriaId: z.number().nullable().optional(), formaPagamento: z.string().optional(), observacao: z.string().optional(), recorrente: z.boolean().optional() }))
+      .mutation(async ({ input }) => { const { id, valor, ...rest } = input; return updateTransacao(id, { ...rest, ...(valor !== undefined ? { valor: String(valor) } : {}) }); }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => { await deleteTransacao(input.id); return { success: true }; }),
+    marcarPago: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => updateTransacao(input.id, { status: "pago" })),
+    marcarPendente: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => updateTransacao(input.id, { status: "pendente" })),
+  }),
+  relatorios: router({
+    dashboard: publicProcedure.query(async () => getDashboardStats()),
+    resumoMensal: publicProcedure
+      .input(z.object({ mes: z.number().min(1).max(12), ano: z.number() }))
+      .query(async ({ input }) => getResumoMensal(input.mes, input.ano)),
+    resumoAnual: publicProcedure
+      .input(z.object({ ano: z.number() }))
+      .query(async ({ input }) => getResumoAnual(input.ano)),
+    despesasPorCategoria: publicProcedure
+      .input(z.object({ mes: z.number().min(1).max(12), ano: z.number() }))
+      .query(async ({ input }) => getDespesasPorCategoria(input.mes, input.ano)),
+    proximosVencimentos: publicProcedure
+      .input(z.object({ dias: z.number().optional() }).optional())
+      .query(async ({ input }) => getProximosVencimentos(input?.dias ?? 7)),
+    anosDisponiveis: publicProcedure.query(async () => getAnosDisponiveis()),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

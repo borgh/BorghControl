@@ -9,7 +9,7 @@ import {
   deleteRecorrenciaGrupo,
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
-  listUsers, updateUserRole, toggleUserAtivo, deleteUser, createUserByAdmin,
+  listUsers, updateUserRole, toggleUserAtivo, deleteUser, createUserByAdmin, updateUserByAdmin,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 
@@ -172,6 +172,19 @@ export const appRouter = router({
         if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
         if (ctx.user.id === input.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode excluir sua própria conta" });
         return deleteUser(input.userId);
+      }),
+    editarUsuario: protectedProcedure
+      .input(z.object({
+        userId: z.number(),
+        name: z.string().min(2).max(100).optional(),
+        email: z.string().email().optional(),
+        password: z.string().min(6).optional(),
+        role: z.enum(["admin", "user"]).optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        const { userId, ...data } = input;
+        return updateUserByAdmin(userId, data);
       }),
   }),
   relatorios: router({

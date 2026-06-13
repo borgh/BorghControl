@@ -69,6 +69,21 @@ export async function createUserByAdmin(data: { name: string; email: string; pas
   return result[0];
 }
 
+export async function updateUserByAdmin(userId: number, data: { name?: string; email?: string; password?: string; role?: "admin" | "user" }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+  if (data.name !== undefined) updateData.name = data.name;
+  if (data.email !== undefined) updateData.email = data.email;
+  if (data.role !== undefined) updateData.role = data.role;
+  if (data.password) {
+    const { hashPassword } = await import("./auth");
+    updateData.passwordHash = await hashPassword(data.password);
+  }
+  await db.update(users).set(updateData as any).where(eq(users.id, userId));
+  return { success: true };
+}
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;

@@ -12,7 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
-import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff } from "lucide-react";
+import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", user: "Usuário" };
 const ROLE_COLORS: Record<string, string> = {
@@ -25,6 +25,18 @@ function formatDate(d: Date | string | null | undefined) {
   return new Date(d).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+type UserItem = {
+  id: number;
+  name: string | null;
+  email: string | null;
+  role: "admin" | "user";
+  ativo: boolean | null;
+  createdAt: Date | null;
+  lastSignedIn: Date | null;
+};
+
+const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
+
 export default function Configuracoes() {
   const { user: currentUser } = useAuth();
   const utils = trpc.useUtils();
@@ -33,18 +45,23 @@ export default function Configuracoes() {
     enabled: currentUser?.role === "admin",
   });
 
+  // Mutations
   const criarMutation = trpc.configuracoes.criarUsuario.useMutation({
     onSuccess: () => {
       toast.success("Usuário criado com sucesso!");
       utils.configuracoes.listUsuarios.invalidate();
-      setModalOpen(false);
-      setForm({ name: "", email: "", password: "", role: "user" });
+      setModalCriar(false);
+      setForm(emptyForm);
     },
     onError: (e) => toast.error(e.message),
   });
 
-  const roleMutation = trpc.configuracoes.atualizarRole.useMutation({
-    onSuccess: () => { toast.success("Permissão atualizada!"); utils.configuracoes.listUsuarios.invalidate(); },
+  const editarMutation = trpc.configuracoes.editarUsuario.useMutation({
+    onSuccess: () => {
+      toast.success("Usuário atualizado com sucesso!");
+      utils.configuracoes.listUsuarios.invalidate();
+      setEditUser(null);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -57,14 +74,28 @@ export default function Configuracoes() {
   });
 
   const excluirMutation = trpc.configuracoes.excluirUsuario.useMutation({
-    onSuccess: () => { toast.success("Usuário excluído!"); utils.configuracoes.listUsuarios.invalidate(); setConfirmDelete(null); },
+    onSuccess: () => {
+      toast.success("Usuário excluído!");
+      utils.configuracoes.listUsuarios.invalidate();
+      setConfirmDelete(null);
+    },
     onError: (e) => toast.error(e.message),
   });
 
-  const [modalOpen, setModalOpen] = useState(false);
+  // State
+  const [modalCriar, setModalCriar] = useState(false);
+  const [editUser, setEditUser] = useState<UserItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "user" as "admin" | "user" });
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [editForm, setEditForm] = useState({ name: "", email: "", password: "", role: "user" as "admin" | "user" });
+
+  function openEdit(u: UserItem) {
+    setEditUser(u);
+    setEditForm({ name: u.name ?? "", email: u.email ?? "", password: "", role: u.role });
+    setShowEditPassword(false);
+  }
 
   if (currentUser?.role !== "admin") {
     return (
@@ -89,7 +120,7 @@ export default function Configuracoes() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Gerencie usuários e permissões do sistema</p>
         </div>
-        <Button onClick={() => setModalOpen(true)} className="gap-2">
+        <Button onClick={() => { setModalCriar(true); setForm(emptyForm); setShowPassword(false); }} className="gap-2">
           <UserPlus className="h-4 w-4" />
           Novo Usuário
         </Button>
@@ -101,6 +132,7 @@ export default function Configuracoes() {
           <CardTitle className="text-base flex items-center gap-2">
             <Users className="h-4 w-4" />
             Usuários do Sistema
+            {usuarios && <Badge variant="secondary" className="ml-1">{usuarios.length}</Badge>}
           </CardTitle>
           <CardDescription>
             Administradores têm acesso total. Usuários comuns podem visualizar e lançar dados, mas não gerenciam outros usuários.
@@ -121,7 +153,7 @@ export default function Configuracoes() {
                   <div
                     key={u.id}
                     className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${
-                      !u.ativo ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/30"
+                      !u.ativo ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/20"
                     }`}
                   >
                     {/* Avatar */}
@@ -149,42 +181,42 @@ export default function Configuracoes() {
                     </div>
 
                     {/* Actions */}
-                    {!isMe && (
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Alterar role */}
-                        <Select
-                          value={u.role}
-                          onValueChange={(role) => roleMutation.mutate({ userId: u.id, role: role as "admin" | "user" })}
-                        >
-                          <SelectTrigger className="h-8 w-36 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">Usuário</SelectItem>
-                            <SelectItem value="admin">Administrador</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {/* Editar */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                        onClick={() => openEdit(u as UserItem)}
+                        title="Editar usuário"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
 
-                        {/* Ativar/Desativar */}
-                        <div className="flex items-center gap-1.5">
-                          <Switch
-                            checked={u.ativo}
-                            onCheckedChange={(ativo) => ativoMutation.mutate({ userId: u.id, ativo })}
-                            className="scale-90"
-                          />
-                        </div>
+                      {!isMe && (
+                        <>
+                          {/* Ativar/Desativar */}
+                          <div className="flex items-center gap-1" title={u.ativo ? "Desativar" : "Ativar"}>
+                            <Switch
+                              checked={u.ativo ?? false}
+                              onCheckedChange={(ativo) => ativoMutation.mutate({ userId: u.id, ativo })}
+                              className="scale-90"
+                            />
+                          </div>
 
-                        {/* Excluir */}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => setConfirmDelete(u.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )}
+                          {/* Excluir */}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setConfirmDelete(u.id)}
+                            title="Excluir usuário"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -231,8 +263,8 @@ export default function Configuracoes() {
         </CardContent>
       </Card>
 
-      {/* Modal: Novo Usuário */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      {/* Modal: Criar Usuário */}
+      <Dialog open={modalCriar} onOpenChange={setModalCriar}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -241,31 +273,16 @@ export default function Configuracoes() {
             </DialogTitle>
           </DialogHeader>
           <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              criarMutation.mutate(form);
-            }}
+            onSubmit={(e) => { e.preventDefault(); criarMutation.mutate(form); }}
             className="space-y-4 pt-2"
           >
             <div className="space-y-1.5">
               <Label>Nome completo *</Label>
-              <Input
-                placeholder="Ex: João Silva"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                minLength={2}
-              />
+              <Input placeholder="Ex: João Silva" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} />
             </div>
             <div className="space-y-1.5">
               <Label>E-mail *</Label>
-              <Input
-                type="email"
-                placeholder="email@exemplo.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-              />
+              <Input type="email" placeholder="email@exemplo.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required />
             </div>
             <div className="space-y-1.5">
               <Label>Senha *</Label>
@@ -275,15 +292,9 @@ export default function Configuracoes() {
                   placeholder="Mínimo 6 caracteres"
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  required
-                  minLength={6}
-                  className="pr-10"
+                  required minLength={6} className="pr-10"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
@@ -291,9 +302,7 @@ export default function Configuracoes() {
             <div className="space-y-1.5">
               <Label>Nível de acesso *</Label>
               <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v as "admin" | "user" })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="user">Usuário — acesso padrão</SelectItem>
                   <SelectItem value="admin">Administrador — acesso total</SelectItem>
@@ -301,12 +310,79 @@ export default function Configuracoes() {
               </Select>
             </div>
             <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={() => setModalCriar(false)}>Cancelar</Button>
               <Button type="submit" disabled={criarMutation.isPending}>
                 {criarMutation.isPending ? "Criando..." : "Criar Usuário"}
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Editar Usuário */}
+      <Dialog open={!!editUser} onOpenChange={(o) => !o && setEditUser(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-5 w-5" />
+              Editar Usuário
+            </DialogTitle>
+          </DialogHeader>
+          {editUser && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const payload: { userId: number; name?: string; email?: string; password?: string; role?: "admin" | "user" } = { userId: editUser.id };
+                if (editForm.name !== (editUser.name ?? "")) payload.name = editForm.name;
+                if (editForm.email !== (editUser.email ?? "")) payload.email = editForm.email;
+                if (editForm.password) payload.password = editForm.password;
+                if (editForm.role !== editUser.role) payload.role = editForm.role;
+                editarMutation.mutate(payload);
+              }}
+              className="space-y-4 pt-2"
+            >
+              <div className="space-y-1.5">
+                <Label>Nome completo *</Label>
+                <Input placeholder="Nome completo" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} required minLength={2} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>E-mail *</Label>
+                <Input type="email" placeholder="email@exemplo.com" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} required />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nova senha <span className="text-muted-foreground text-xs">(deixe em branco para manter a atual)</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showEditPassword ? "text" : "password"}
+                    placeholder="Nova senha (opcional)"
+                    value={editForm.password}
+                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    minLength={6}
+                    className="pr-10"
+                  />
+                  <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Nível de acesso *</Label>
+                <Select value={editForm.role} onValueChange={(v) => setEditForm({ ...editForm, role: v as "admin" | "user" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Usuário — acesso padrão</SelectItem>
+                    <SelectItem value="admin">Administrador — acesso total</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <DialogFooter className="pt-2">
+                <Button type="button" variant="outline" onClick={() => setEditUser(null)}>Cancelar</Button>
+                <Button type="submit" disabled={editarMutation.isPending}>
+                  {editarMutation.isPending ? "Salvando..." : "Salvar Alterações"}
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 

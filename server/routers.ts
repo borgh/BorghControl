@@ -140,6 +140,7 @@ export const appRouter = router({
         observacao: z.string().optional(),
         recorrente: z.boolean(),
         totalParcelas: z.number().min(1).max(360).nullable().optional(),
+        escopo: z.enum(["apenas_este", "este_e_futuros", "todos"]).optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;

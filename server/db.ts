@@ -392,6 +392,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   observacao?: string;
   recorrente: boolean;
   totalParcelas?: number | null;
+  escopo?: "apenas_este" | "este_e_futuros" | "todos";
 }) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -400,6 +401,8 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   const atual = await db.select().from(transacoes).where(eq(transacoes.id, id)).limit(1);
   const registroAtual = atual[0];
   if (!registroAtual) throw new Error("Transação não encontrada");
+
+  const escopo = data.escopo ?? "este_e_futuros";
 
   if (!data.recorrente) {
     // Sem recorrência: apenas atualiza este registro e remove recorrência
@@ -425,6 +428,54 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
     return { updated: result[0], created: [], grupoId: null };
   }
 
+  // ─── ESCOPO: apenas_este ────────────────────────────────────────────────────
+  if (escopo === "apenas_este") {
+    // Atualiza somente este registro, sem tocar nos demais do grupo
+    const result = await db.update(transacoes).set({
+      descricao: data.descricao,
+      valor: data.valor,
+      tipo: data.tipo,
+      status: data.status,
+      dataVencimento: data.dataVencimento ?? null,
+      diaVencimento: data.diaVencimento ?? null,
+      vencimentoTexto: data.vencimentoTexto ?? null,
+      mes: data.mes,
+      ano: data.ano,
+      categoriaId: data.categoriaId ?? null,
+      formaPagamento: data.formaPagamento ?? null,
+      observacao: data.observacao ?? null,
+      recorrente: true,
+      updatedAt: new Date(),
+    }).where(eq(transacoes.id, id)).returning();
+    return { updated: result[0], created: [], grupoId: registroAtual.recorrenciaGrupoId };
+  }
+
+  // ─── ESCOPO: todos ──────────────────────────────────────────────────────────
+  if (escopo === "todos" && registroAtual.recorrenciaGrupoId) {
+    // Atualiza todos os registros do grupo (mantém mes/ano/parcela de cada um)
+    const todoGrupo = await db.select().from(transacoes)
+      .where(eq(transacoes.recorrenciaGrupoId, registroAtual.recorrenciaGrupoId))
+      .orderBy(transacoes.ano, transacoes.mes);
+
+    for (const t of todoGrupo) {
+      const novaDesc = data.totalParcelas != null && t.parcelaAtual != null
+        ? `${data.descricao} (${t.parcelaAtual}/${data.totalParcelas})`
+        : data.descricao;
+      await db.update(transacoes).set({
+        descricao: novaDesc,
+        valor: data.valor,
+        tipo: data.tipo,
+        categoriaId: data.categoriaId ?? null,
+        formaPagamento: data.formaPagamento ?? null,
+        observacao: data.observacao ?? null,
+        totalParcelas: data.totalParcelas ?? null,
+        updatedAt: new Date(),
+      }).where(eq(transacoes.id, t.id));
+    }
+    return { updated: registroAtual, created: [], grupoId: registroAtual.recorrenciaGrupoId };
+  }
+
+  // ─── ESCOPO: este_e_futuros (padrão) ─────────────────────────────────────
   // Recorrente: determinar grupoId (reutilizar existente ou criar novo)
   const grupoId = registroAtual.recorrenciaGrupoId ?? randomUUID();
 

@@ -34,9 +34,9 @@ function RecorrenciaBadge({ item }: { item: any }) {
 
 export default function Despesas() {
   const hoje = new Date();
-  // Padrão: todos os meses e todos os anos (sem filtro de período)
-  const [mes, setMes] = useState("0");   // "0" = todos os meses
-  const [ano, setAno] = useState("0");   // "0" = todos os anos
+  // Padrão: mês e ano atuais
+  const [mes, setMes] = useState(String(hoje.getMonth() + 1));
+  const [ano, setAno] = useState(String(hoje.getFullYear()));
   const [status, setStatus] = useState("todos");
   const [busca, setBusca] = useState("");
   const [modal, setModal] = useState(false);

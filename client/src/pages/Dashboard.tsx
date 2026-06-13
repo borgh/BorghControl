@@ -36,6 +36,46 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
   );
 }
 
+function VencimentoLista({ items, tipo }: { items: any[]; tipo: "despesa" | "receita" }) {
+  const isDespesa = tipo === "despesa";
+  if (items.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground text-center py-3">
+        Nenhum vencimento nos próximos 7 dias
+      </p>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {items.map((v: any) => (
+        <div
+          key={v.id}
+          className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            <div
+              className="h-2 w-2 rounded-full shrink-0"
+              style={{ background: v.categoriaCor ?? (isDespesa ? "#ef4444" : "#10b981") }}
+            />
+            <div className="min-w-0">
+              <p className="text-sm font-medium truncate">{v.descricao}</p>
+              <p className="text-xs text-muted-foreground">
+                {v.categoriaNome ?? "Sem categoria"} · Dia {v.diaVencimento}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-sm font-semibold ${isDespesa ? "text-red-600" : "text-emerald-600"}`}>
+              {fmt(Number(v.valor))}
+            </span>
+            <Badge variant="outline" className="text-xs badge-pendente">Pendente</Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const COLORS = ["#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16"];
 
 export default function Dashboard() {
@@ -53,13 +93,18 @@ export default function Dashboard() {
         <Skeleton className="h-72" />
         <Skeleton className="h-72" />
       </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Skeleton className="h-48" />
+        <Skeleton className="h-48" />
+      </div>
     </div>
   );
 
   const rm = stats?.resumoMensal;
   const anuais = (stats?.anuais ?? []).map((m: any) => ({ ...m, nome: MESES[m.mes - 1] }));
   const categorias = stats?.despesasPorCategoria ?? [];
-  const vencimentos = stats?.proximosVencimentos ?? [];
+  const vencimentosDespesas = stats?.proximosVencimentosDespesas ?? [];
+  const vencimentosReceitas = stats?.proximosVencimentosReceitas ?? [];
 
   return (
     <div className="space-y-6">
@@ -123,38 +168,50 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Próximos vencimentos */}
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-amber-500" /> Próximos Vencimentos (7 dias)
-          </CardTitle>
-          <Link href="/despesas"><Button variant="ghost" size="sm" className="text-xs h-7">Ver todas</Button></Link>
-        </CardHeader>
-        <CardContent>
-          {vencimentos.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum vencimento nos próximos 7 dias</p>
-          ) : (
-            <div className="space-y-2">
-              {vencimentos.map((v: any) => (
-                <div key={v.id} className="flex items-center justify-between py-2 px-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-2 w-2 rounded-full shrink-0" style={{ background: v.categoriaCor ?? "#94a3b8" }} />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{v.descricao}</p>
-                      <p className="text-xs text-muted-foreground">{v.categoriaNome ?? "Sem categoria"} · Dia {v.diaVencimento}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-sm font-semibold text-red-600">{fmt(Number(v.valor))}</span>
-                    <Badge variant="outline" className="text-xs badge-pendente">Pendente</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Próximos vencimentos — separados por tipo */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Despesas */}
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-red-500" />
+              Despesas Vencendo (7 dias)
+              {vencimentosDespesas.length > 0 && (
+                <Badge className="ml-1 bg-red-100 text-red-700 border-red-200 text-xs font-semibold">
+                  {vencimentosDespesas.length}
+                </Badge>
+              )}
+            </CardTitle>
+            <Link href="/despesas">
+              <Button variant="ghost" size="sm" className="text-xs h-7">Ver todas</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <VencimentoLista items={vencimentosDespesas} tipo="despesa" />
+          </CardContent>
+        </Card>
+
+        {/* Receitas */}
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-emerald-500" />
+              Receitas Vencendo (7 dias)
+              {vencimentosReceitas.length > 0 && (
+                <Badge className="ml-1 bg-emerald-100 text-emerald-700 border-emerald-200 text-xs font-semibold">
+                  {vencimentosReceitas.length}
+                </Badge>
+              )}
+            </CardTitle>
+            <Link href="/receitas">
+              <Button variant="ghost" size="sm" className="text-xs h-7">Ver todas</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <VencimentoLista items={vencimentosReceitas} tipo="receita" />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

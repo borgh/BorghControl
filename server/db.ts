@@ -333,7 +333,7 @@ export async function getDespesasPorCategoria(mes: number, ano: number) {
     .orderBy(sql`SUM(CAST(${transacoes.valor} AS NUMERIC)) DESC`);
 }
 
-export async function getProximosVencimentos(diasAfrente = 7) {
+export async function getProximosVencimentos(diasAfrente = 7, tipo?: "despesa" | "receita") {
   const db = await getDb();
   if (!db) return [];
   const hoje = new Date();
@@ -341,6 +341,12 @@ export async function getProximosVencimentos(diasAfrente = 7) {
   const ano = hoje.getFullYear();
   const diaAtual = hoje.getDate();
   const diaLimite = diaAtual + diasAfrente;
+  const conditions = [
+    eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.status, "pendente"),
+    sql`${transacoes.diaVencimento} >= ${diaAtual}`,
+    sql`${transacoes.diaVencimento} <= ${diaLimite}`
+  ];
+  if (tipo) conditions.push(eq(transacoes.tipo, tipo));
   return db.select({
     id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
     tipo: transacoes.tipo, diaVencimento: transacoes.diaVencimento, vencimentoTexto: transacoes.vencimentoTexto,
@@ -350,12 +356,8 @@ export async function getProximosVencimentos(diasAfrente = 7) {
   })
     .from(transacoes)
     .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
-    .where(and(
-      eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.status, "pendente"),
-      sql`${transacoes.diaVencimento} >= ${diaAtual}`,
-      sql`${transacoes.diaVencimento} <= ${diaLimite}`
-    ))
-    .orderBy(transacoes.diaVencimento).limit(10);
+    .where(and(...conditions))
+    .orderBy(transacoes.diaVencimento).limit(15);
 }
 
 export async function getDashboardStats() {
@@ -364,11 +366,12 @@ export async function getDashboardStats() {
   const hoje = new Date();
   const mes = hoje.getMonth() + 1;
   const ano = hoje.getFullYear();
-  const [resumo, porCategoria, anuais, vencimentos] = await Promise.all([
+  const [resumo, porCategoria, anuais, vencimentosDespesas, vencimentosReceitas] = await Promise.all([
     getResumoMensal(mes, ano),
     getDespesasPorCategoria(mes, ano),
     getResumoAnual(ano),
-    getProximosVencimentos(7),
+    getProximosVencimentos(7, "despesa"),
+    getProximosVencimentos(7, "receita"),
   ]);
   const totais = await db.select({
     tipo: transacoes.tipo, status: transacoes.status, count: sql<number>`COUNT(*)`,
@@ -379,7 +382,7 @@ export async function getDashboardStats() {
     if (t.tipo === "receita") contReceitas += Number(t.count);
     if (t.status === "pendente") contPendentes += Number(t.count);
   }
-  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentos: vencimentos, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
 }
 
 export async function getAnosDisponiveis() {

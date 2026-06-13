@@ -9,7 +9,9 @@ import {
   deleteRecorrenciaGrupo,
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
+  listUsers, updateUserRole, toggleUserAtivo, deleteUser, createUserByAdmin,
 } from "./db";
+import { TRPCError } from "@trpc/server";
 
 export const appRouter = router({
   system: systemRouter,
@@ -132,6 +134,45 @@ export const appRouter = router({
     marcarPendente: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => updateTransacao(input.id, { status: "pendente" })),
+  }),
+  configuracoes: router({
+    // Apenas admins podem acessar
+    listUsuarios: protectedProcedure.query(async ({ ctx }) => {
+      if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "Acesso restrito a administradores" });
+      return listUsers();
+    }),
+    criarUsuario: protectedProcedure
+      .input(z.object({
+        name: z.string().min(2).max(100),
+        email: z.string().email(),
+        password: z.string().min(6),
+        role: z.enum(["admin", "user"]).default("user"),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        return createUserByAdmin(input);
+      }),
+    atualizarRole: protectedProcedure
+      .input(z.object({ userId: z.number(), role: z.enum(["admin", "user"]) }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.id === input.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode alterar seu próprio papel" });
+        return updateUserRole(input.userId, input.role);
+      }),
+    toggleAtivo: protectedProcedure
+      .input(z.object({ userId: z.number(), ativo: z.boolean() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.id === input.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode desativar sua própria conta" });
+        return toggleUserAtivo(input.userId, input.ativo);
+      }),
+    excluirUsuario: protectedProcedure
+      .input(z.object({ userId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        if (ctx.user?.role !== "admin") throw new TRPCError({ code: "FORBIDDEN" });
+        if (ctx.user.id === input.userId) throw new TRPCError({ code: "BAD_REQUEST", message: "Você não pode excluir sua própria conta" });
+        return deleteUser(input.userId);
+      }),
   }),
   relatorios: router({
     dashboard: publicProcedure.query(async () => getDashboardStats()),

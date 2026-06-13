@@ -10,6 +10,7 @@ import Despesas from "./pages/Despesas";
 import Receitas from "./pages/Receitas";
 import Categorias from "./pages/Categorias";
 import Relatorios from "./pages/Relatorios";
+import Configuracoes from "./pages/Configuracoes";
 import BorghLayout from "./components/BorghLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
@@ -39,6 +40,7 @@ function Router() {
       <Route path="/receitas" component={() => <ProtectedRoute component={Receitas} />} />
       <Route path="/categorias" component={() => <ProtectedRoute component={Categorias} />} />
       <Route path="/relatorios" component={() => <ProtectedRoute component={Relatorios} />} />
+      <Route path="/configuracoes" component={() => <ProtectedRoute component={Configuracoes} />} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

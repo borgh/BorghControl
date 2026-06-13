@@ -95,6 +95,10 @@ export async function authenticateRequest(req: Request): Promise<User | null> {
 
 // ─── Register / Login ─────────────────────────────────────────────────────────
 
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, 12);
+}
+
 export async function registerUser(
   email: string,
   password: string,

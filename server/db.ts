@@ -24,6 +24,51 @@ export async function getDb() {
   return _db;
 }
 
+// ─── Gerenciamento de Usuários (Admin) ──────────────────────────────────────
+
+export async function listUsers() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    id: users.id, name: users.name, email: users.email, role: users.role,
+    ativo: users.ativo, createdAt: users.createdAt, lastSignedIn: users.lastSignedIn,
+  }).from(users).orderBy(users.createdAt);
+}
+
+export async function updateUserRole(userId: number, role: "admin" | "user") {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ role, updatedAt: new Date() }).where(eq(users.id, userId));
+  return { success: true };
+}
+
+export async function toggleUserAtivo(userId: number, ativo: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ ativo, updatedAt: new Date() }).where(eq(users.id, userId));
+  return { success: true };
+}
+
+export async function deleteUser(userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.delete(users).where(eq(users.id, userId));
+  return { success: true };
+}
+
+export async function createUserByAdmin(data: { name: string; email: string; password: string; role: "admin" | "user" }) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const { hashPassword } = await import("./auth");
+  const passwordHash = await hashPassword(data.password);
+  const openId = `local_${randomUUID()}`;
+  const result = await db.insert(users).values({
+    openId, name: data.name, email: data.email, passwordHash,
+    loginMethod: "local", role: data.role, ativo: true,
+  }).returning({ id: users.id, name: users.name, email: users.email, role: users.role });
+  return result[0];
+}
+
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;

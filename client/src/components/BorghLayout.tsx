@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
-  Menu, LogOut, ChevronRight, DollarSign, X
+  Menu, LogOut, ChevronRight, DollarSign, X, Settings
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,10 @@ const navItems = [
   { href: "/receitas", label: "Contas a Receber", icon: TrendingUp },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/categorias", label: "Categorias", icon: Tag },
+];
+
+const adminNavItems = [
+  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: string; icon: any; onClick?: () => void }) {
@@ -65,6 +69,16 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         {navItems.map((item) => (
           <NavLink key={item.href} {...item} onClick={onClose} />
         ))}
+        {user?.role === "admin" && (
+          <>
+            <div className="pt-3 pb-1 px-3">
+              <p className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider">Admin</p>
+            </div>
+            {adminNavItems.map((item) => (
+              <NavLink key={item.href} {...item} onClick={onClose} />
+            ))}
+          </>
+        )}
       </nav>
       {/* User */}
       <div className="px-3 py-4 border-t border-sidebar-border">

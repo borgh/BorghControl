@@ -220,6 +220,9 @@ export default function Receitas() {
                         {item.dataVencimento
                           ? ` · vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
                           : item.diaVencimento ? ` · dia ${item.diaVencimento}` : ""}
+                        {item.recorrente && item.totalParcelas != null && item.parcelaAtual != null
+                          ? ` · Parcela ${item.parcelaAtual}/${item.totalParcelas}`
+                          : ""}
                         {` · ${MESES[item.mes]}/${item.ano}`}
                       </p>
                     </div>

@@ -50,9 +50,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Logo */}
       <div className="flex items-center justify-between px-4 py-5 border-b border-sidebar-border">
         <div className="flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-sidebar-primary flex items-center justify-center shadow-sm">
-            <DollarSign className="h-4 w-4 text-sidebar-primary-foreground" />
-          </div>
+          <img src="/icons/icon-192x192.png" alt="BorghControl" className="h-9 w-9 rounded-xl shadow-sm object-cover" />
           <div>
             <p className="font-bold text-sm text-sidebar-foreground tracking-tight">BorghControl</p>
             <p className="text-xs text-sidebar-foreground/50">Controle Financeiro</p>

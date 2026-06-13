@@ -35,9 +35,7 @@ export default function Login() {
       <div className="w-full max-w-sm space-y-6">
         {/* Brand */}
         <div className="text-center space-y-3">
-          <div className="mx-auto h-14 w-14 rounded-2xl bg-primary flex items-center justify-center shadow-lg">
-            <DollarSign className="h-7 w-7 text-primary-foreground" />
-          </div>
+          <img src="/icons/icon-192x192.png" alt="BorghControl" className="mx-auto h-16 w-16 rounded-2xl shadow-lg object-cover" />
           <div>
             <h1 className="text-2xl font-bold tracking-tight">BorghControl</h1>
             <p className="text-sm text-muted-foreground">Controle financeiro pessoal</p>

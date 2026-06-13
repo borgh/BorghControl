@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
@@ -17,10 +17,6 @@ const navItems = [
   { href: "/receitas", label: "Contas a Receber", icon: TrendingUp },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/categorias", label: "Categorias", icon: Tag },
-];
-
-const adminNavItems = [
-  { href: "/configuracoes", label: "Configurações", icon: Settings },
 ];
 
 function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: string; icon: any; onClick?: () => void }) {
@@ -44,7 +40,14 @@ function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: st
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
+  const [, navigate] = useLocation();
   const initials = user?.name?.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase() ?? "BC";
+
+  function goTo(path: string) {
+    if (onClose) onClose();
+    navigate(path);
+  }
+
   return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       {/* Logo */}
@@ -62,23 +65,15 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
           </Button>
         )}
       </div>
+
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
         {navItems.map((item) => (
           <NavLink key={item.href} {...item} onClick={onClose} />
         ))}
-        {user?.role === "admin" && (
-          <>
-            <div className="pt-3 pb-1 px-3">
-              <p className="text-xs font-semibold text-sidebar-foreground/40 uppercase tracking-wider">Admin</p>
-            </div>
-            {adminNavItems.map((item) => (
-              <NavLink key={item.href} {...item} onClick={onClose} />
-            ))}
-          </>
-        )}
       </nav>
-      {/* User */}
+
+      {/* User menu */}
       <div className="px-3 py-4 border-t border-sidebar-border">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -92,10 +87,29 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
               </div>
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuContent align="end" side="top" className="w-52 mb-1">
+            <DropdownMenuLabel className="text-xs text-muted-foreground font-normal pb-1">
+              {user?.name ?? "Usuário"}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-              <LogOut className="h-4 w-4 mr-2" /> Sair
+            {user?.role === "admin" && (
+              <>
+                <DropdownMenuItem
+                  onClick={() => goTo("/configuracoes")}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Settings className="h-4 w-4 text-muted-foreground" />
+                  Configurações
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            <DropdownMenuItem
+              onClick={logout}
+              className="text-destructive focus:text-destructive gap-2 cursor-pointer"
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -130,9 +144,7 @@ export default function BorghLayout({ children }: { children: React.ReactNode })
             </SheetTrigger>
           </Sheet>
           <div className="flex items-center gap-2">
-            <div className="h-6 w-6 rounded bg-primary flex items-center justify-center">
-              <DollarSign className="h-3 w-3 text-primary-foreground" />
-            </div>
+            <img src="/icons/icon-192x192.png" alt="BorghControl" className="h-6 w-6 rounded object-cover" />
             <span className="font-bold text-sm">BorghControl</span>
           </div>
         </header>

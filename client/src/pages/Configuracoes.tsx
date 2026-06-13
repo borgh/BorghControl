@@ -11,8 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil } from "lucide-react";
+import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil, CheckCircle2, XCircle } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", user: "Usuário" };
 const ROLE_COLORS: Record<string, string> = {
@@ -34,6 +35,41 @@ type UserItem = {
   createdAt: Date | null;
   lastSignedIn: Date | null;
 };
+
+// Definição das permissões disponíveis por papel
+type Permission = {
+  key: string;
+  label: string;
+  adminDefault: boolean;
+  userDefault: boolean;
+  adminLocked?: boolean; // admin sempre tem, não pode remover
+};
+
+const PERMISSIONS: Permission[] = [
+  { key: "view_dashboard", label: "Visualizar dashboard e relatórios", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "create_lancamentos", label: "Criar novos lançamentos", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "edit_lancamentos", label: "Editar lançamentos existentes", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "delete_lancamentos", label: "Excluir lançamentos", adminDefault: true, userDefault: false, adminLocked: true },
+  { key: "mark_paid", label: "Marcar despesas e receitas como pagas", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "manage_categorias", label: "Gerenciar categorias", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "view_relatorios", label: "Acessar relatórios detalhados", adminDefault: true, userDefault: true, adminLocked: true },
+  { key: "manage_users", label: "Gerenciar usuários e permissões", adminDefault: true, userDefault: false, adminLocked: true },
+];
+
+const STORAGE_KEY = "borghcontrol_user_permissions";
+
+function loadUserPermissions(): Record<string, boolean> {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  // Padrão: permissões default do usuário
+  return Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
+}
+
+function saveUserPermissions(perms: Record<string, boolean>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(perms));
+}
 
 const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
 
@@ -91,10 +127,27 @@ export default function Configuracoes() {
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState({ name: "", email: "", password: "", role: "user" as "admin" | "user" });
 
+  // Permissões editáveis do perfil Usuário
+  const [editandoPermissoes, setEditandoPermissoes] = useState(false);
+  const [userPerms, setUserPerms] = useState<Record<string, boolean>>(loadUserPermissions);
+  const [userPermsTemp, setUserPermsTemp] = useState<Record<string, boolean>>({});
+
   function openEdit(u: UserItem) {
     setEditUser(u);
     setEditForm({ name: u.name ?? "", email: u.email ?? "", password: "", role: u.role });
     setShowEditPassword(false);
+  }
+
+  function openEditPermissoes() {
+    setUserPermsTemp({ ...userPerms });
+    setEditandoPermissoes(true);
+  }
+
+  function salvarPermissoes() {
+    setUserPerms(userPermsTemp);
+    saveUserPermissions(userPermsTemp);
+    setEditandoPermissoes(false);
+    toast.success("Permissões do perfil Usuário atualizadas!");
   }
 
   if (currentUser?.role !== "admin") {
@@ -156,14 +209,11 @@ export default function Configuracoes() {
                       !u.ativo ? "opacity-50 bg-muted/30" : "bg-card hover:bg-muted/20"
                     }`}
                   >
-                    {/* Avatar */}
                     <div className={`h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${
                       u.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"
                     }`}>
                       {(u.name ?? u.email ?? "?")[0].toUpperCase()}
                     </div>
-
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium truncate">{u.name ?? "—"}</span>
@@ -179,23 +229,17 @@ export default function Configuracoes() {
                         {u.lastSignedIn && ` · Último acesso: ${formatDate(u.lastSignedIn)}`}
                       </p>
                     </div>
-
-                    {/* Actions */}
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {/* Editar */}
                       <Button
-                        variant="ghost"
-                        size="icon"
+                        variant="ghost" size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
                         onClick={() => openEdit(u as UserItem)}
                         title="Editar usuário"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
-
                       {!isMe && (
                         <>
-                          {/* Ativar/Desativar */}
                           <div className="flex items-center gap-1" title={u.ativo ? "Desativar" : "Ativar"}>
                             <Switch
                               checked={u.ativo ?? false}
@@ -203,11 +247,8 @@ export default function Configuracoes() {
                               className="scale-90"
                             />
                           </div>
-
-                          {/* Excluir */}
                           <Button
-                            variant="ghost"
-                            size="icon"
+                            variant="ghost" size="icon"
                             className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                             onClick={() => setConfirmDelete(u.id)}
                             title="Excluir usuário"
@@ -225,38 +266,62 @@ export default function Configuracoes() {
         </CardContent>
       </Card>
 
-      {/* Legenda de permissões */}
+      {/* Níveis de Acesso */}
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Shield className="h-4 w-4" />
-            Níveis de Acesso
-          </CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Níveis de Acesso
+              </CardTitle>
+              <CardDescription className="mt-1">
+                Visualize e edite as permissões padrão de cada perfil de usuário.
+              </CardDescription>
+            </div>
+            <Button variant="outline" size="sm" onClick={openEditPermissoes} className="gap-2">
+              <Pencil className="h-3.5 w-3.5" />
+              Editar Permissões do Usuário
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Administrador — fixo */}
             <div className="p-4 rounded-lg border bg-purple-50/50 border-purple-100">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <Badge className="bg-purple-100 text-purple-700 border-purple-200 border">Administrador</Badge>
+                <span className="text-xs text-muted-foreground">Permissões fixas</span>
               </div>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>✅ Acesso total ao sistema</li>
-                <li>✅ Gerenciar usuários e permissões</li>
-                <li>✅ Criar, editar e excluir todos os lançamentos</li>
-                <li>✅ Visualizar relatórios e dashboard</li>
-                <li>✅ Gerenciar categorias</li>
+              <ul className="text-sm space-y-1.5">
+                {PERMISSIONS.map((p) => (
+                  <li key={p.key} className="flex items-start gap-2 text-muted-foreground">
+                    <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                    {p.label}
+                  </li>
+                ))}
               </ul>
             </div>
+
+            {/* Usuário — editável */}
             <div className="p-4 rounded-lg border bg-blue-50/50 border-blue-100">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <Badge className="bg-blue-100 text-blue-700 border-blue-200 border">Usuário</Badge>
+                <span className="text-xs text-muted-foreground">Permissões configuráveis</span>
               </div>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                <li>✅ Visualizar dashboard e relatórios</li>
-                <li>✅ Criar e editar lançamentos</li>
-                <li>✅ Marcar despesas e receitas como pagas</li>
-                <li>✅ Gerenciar categorias</li>
-                <li>❌ Gerenciar usuários e permissões</li>
+              <ul className="text-sm space-y-1.5">
+                {PERMISSIONS.map((p) => {
+                  const allowed = userPerms[p.key] ?? p.userDefault;
+                  return (
+                    <li key={p.key} className="flex items-start gap-2 text-muted-foreground">
+                      {allowed
+                        ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                        : <XCircle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                      }
+                      <span className={!allowed ? "line-through opacity-60" : ""}>{p.label}</span>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           </div>
@@ -272,10 +337,7 @@ export default function Configuracoes() {
               Novo Usuário
             </DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={(e) => { e.preventDefault(); criarMutation.mutate(form); }}
-            className="space-y-4 pt-2"
-          >
+          <form onSubmit={(e) => { e.preventDefault(); criarMutation.mutate(form); }} className="space-y-4 pt-2">
             <div className="space-y-1.5">
               <Label>Nome completo *</Label>
               <Input placeholder="Ex: João Silva" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required minLength={2} />
@@ -357,8 +419,7 @@ export default function Configuracoes() {
                     placeholder="Nova senha (opcional)"
                     value={editForm.password}
                     onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                    minLength={6}
-                    className="pr-10"
+                    minLength={6} className="pr-10"
                   />
                   <button type="button" onClick={() => setShowEditPassword(!showEditPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
                     {showEditPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -383,6 +444,44 @@ export default function Configuracoes() {
               </DialogFooter>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Editar Permissões do Usuário */}
+      <Dialog open={editandoPermissoes} onOpenChange={(o) => !o && setEditandoPermissoes(false)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Shield className="h-5 w-5" />
+              Editar Permissões — Perfil Usuário
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1 pt-2">
+            <p className="text-sm text-muted-foreground mb-4">
+              Defina quais ações os usuários com perfil <strong>Usuário</strong> podem realizar no sistema. As permissões do <strong>Administrador</strong> são fixas e não podem ser alteradas.
+            </p>
+            <div className="space-y-3">
+              {PERMISSIONS.map((p) => (
+                <div key={p.key} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors">
+                  <Checkbox
+                    id={`perm-${p.key}`}
+                    checked={userPermsTemp[p.key] ?? p.userDefault}
+                    onCheckedChange={(checked) =>
+                      setUserPermsTemp((prev) => ({ ...prev, [p.key]: !!checked }))
+                    }
+                    className="mt-0.5"
+                  />
+                  <label htmlFor={`perm-${p.key}`} className="text-sm cursor-pointer leading-snug">
+                    {p.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          <DialogFooter className="pt-4">
+            <Button variant="outline" onClick={() => setEditandoPermissoes(false)}>Cancelar</Button>
+            <Button onClick={salvarPermissoes}>Salvar Permissões</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

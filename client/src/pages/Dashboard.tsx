@@ -123,7 +123,11 @@ export default function Dashboard() {
 
   const rm = stats?.resumoMensal;
   const anuais = (stats?.anuais ?? []).map((m: any) => ({ ...m, nome: MESES[m.mes - 1] }));
-  const categorias = stats?.despesasPorCategoria ?? [];
+  const categorias = (stats?.despesasPorCategoria ?? []).map((c: any) => ({
+    ...c,
+    total: Number(c.total),
+    categoriaNome: c.categoriaNome ?? "Sem categoria",
+  })).filter((c: any) => c.total > 0);
   const vencimentosDespesas = stats?.proximosVencimentosDespesas ?? [];
   const vencimentosReceitas = stats?.proximosVencimentosReceitas ?? [];
   const atrasoDespesas = stats?.atrasoDespesas ?? [];

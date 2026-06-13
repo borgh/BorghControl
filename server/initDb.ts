@@ -124,9 +124,11 @@ export async function initDatabase(): Promise<void> {
     return;
   }
 
-  const sslConfigs: any[] = [{ rejectUnauthorized: false }, false];
+  // Para hosts internos do Railway (.railway.internal), não usar SSL
+  const isInternalHost = url.includes(".railway.internal") || url.includes("localhost") || url.includes("127.0.0.1");
+  const sslConfigs: any[] = isInternalHost ? [false, { rejectUnauthorized: false }] : [{ rejectUnauthorized: false }, false];
   for (const ssl of sslConfigs) {
-    const pool = new Pool({ connectionString: url, ssl });
+    const pool = new Pool({ connectionString: url, ssl: ssl === false ? undefined : ssl });
     try {
       const client = await pool.connect();
 
@@ -243,8 +245,9 @@ export async function initDatabase(): Promise<void> {
       return;
     } catch (err: any) {
       await pool.end().catch(() => {});
-      if (err?.message?.includes("SSL") || err?.code === "ECONNREFUSED") continue;
-      console.error("[BorghControl DB] Erro:", err?.message);
+      console.error("[BorghControl DB] Tentativa falhou:", err?.message, "| SSL:", ssl);
+      if (err?.message?.includes("SSL") || err?.code === "ECONNREFUSED" || err?.message?.includes("connect")) continue;
+      console.error("[BorghControl DB] Erro não-SSL, abortando:", err?.message);
       return;
     }
   }

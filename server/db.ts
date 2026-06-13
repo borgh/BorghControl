@@ -12,7 +12,8 @@ export async function getDb() {
     const isPostgres = url.startsWith("postgresql://") || url.startsWith("postgres://");
     if (!isPostgres) return null;
     try {
-      const ssl = { rejectUnauthorized: false };
+      const isInternalHost = url.includes(".railway.internal") || url.includes("localhost") || url.includes("127.0.0.1");
+      const ssl = isInternalHost ? undefined : { rejectUnauthorized: false };
       _pool = new Pool({ connectionString: url, ssl });
       _db = drizzle(_pool);
     } catch (error) {

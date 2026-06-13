@@ -56,20 +56,7 @@ const PERMISSIONS: Permission[] = [
   { key: "manage_users", label: "Gerenciar usuários e permissões", adminDefault: true, userDefault: false, adminLocked: true },
 ];
 
-const STORAGE_KEY = "borghcontrol_user_permissions";
-
-function loadUserPermissions(): Record<string, boolean> {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch {}
-  // Padrão: permissões default do usuário
-  return Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
-}
-
-function saveUserPermissions(perms: Record<string, boolean>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(perms));
-}
+const DEFAULT_USER_PERMS = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
 
 const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
 
@@ -127,10 +114,23 @@ export default function Configuracoes() {
   const [form, setForm] = useState(emptyForm);
   const [editForm, setEditForm] = useState({ name: "", email: "", password: "", role: "user" as "admin" | "user" });
 
-  // Permissões editáveis do perfil Usuário
+  // Permissões editáveis do perfil Usuário — carregadas do banco
   const [editandoPermissoes, setEditandoPermissoes] = useState(false);
-  const [userPerms, setUserPerms] = useState<Record<string, boolean>>(loadUserPermissions);
   const [userPermsTemp, setUserPermsTemp] = useState<Record<string, boolean>>({});
+
+  const { data: dbPerms, isLoading: loadingPerms } = trpc.configuracoes.getPermissoes.useQuery(undefined, {
+    enabled: currentUser?.role === "admin",
+  });
+  const userPerms: Record<string, boolean> = dbPerms ?? DEFAULT_USER_PERMS;
+
+  const salvarPermissoesMutation = trpc.configuracoes.salvarPermissoes.useMutation({
+    onSuccess: () => {
+      utils.configuracoes.getPermissoes.invalidate();
+      setEditandoPermissoes(false);
+      toast.success("Permissões do perfil Usuário atualizadas com sucesso!");
+    },
+    onError: (e) => toast.error(e.message),
+  });
 
   function openEdit(u: UserItem) {
     setEditUser(u);
@@ -144,10 +144,7 @@ export default function Configuracoes() {
   }
 
   function salvarPermissoes() {
-    setUserPerms(userPermsTemp);
-    saveUserPermissions(userPermsTemp);
-    setEditandoPermissoes(false);
-    toast.success("Permissões do perfil Usuário atualizadas!");
+    salvarPermissoesMutation.mutate({ permissions: userPermsTemp });
   }
 
   if (currentUser?.role !== "admin") {
@@ -480,7 +477,9 @@ export default function Configuracoes() {
           </div>
           <DialogFooter className="pt-4">
             <Button variant="outline" onClick={() => setEditandoPermissoes(false)}>Cancelar</Button>
-            <Button onClick={salvarPermissoes}>Salvar Permissões</Button>
+            <Button onClick={salvarPermissoes} disabled={salvarPermissoesMutation.isPending}>
+              {salvarPermissoesMutation.isPending ? "Salvando..." : "Salvar Permissões"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

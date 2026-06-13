@@ -17,7 +17,7 @@ export const appRouter = router({
     register: publicProcedure
       .input(z.object({ name: z.string().min(2), email: z.string().email(), password: z.string().min(6) }))
       .mutation(async ({ input, ctx }) => {
-        const { token, user } = await registerUser(input.name, input.email, input.password);
+        const { token, user } = await registerUser(input.email, input.password, input.name);
         const cookieOptions = getSessionCookieOptions(ctx.req);
         ctx.res.cookie(COOKIE_NAME, token, { ...cookieOptions, maxAge: 7 * 24 * 60 * 60 * 1000 });
         return { success: true, user: { id: user.id, name: user.name, email: user.email, role: user.role } };

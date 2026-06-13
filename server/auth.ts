@@ -1,5 +1,5 @@
 /**
- * VagaWin — Autenticação própria com email/senha + JWT
+ * BorghControl — Autenticação própria com email/senha + JWT
  * Substitui completamente o OAuth da Manus.
  */
 import bcrypt from "bcryptjs";
@@ -10,7 +10,7 @@ import { users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import type { User } from "../drizzle/schema";
 
-export const COOKIE_NAME = "vagawin_session";
+export const COOKIE_NAME = "borghcontrol_session";
 const ONE_YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 function getSecret(): Uint8Array {

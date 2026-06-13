@@ -24,9 +24,14 @@ export default function Relatorios() {
 
   const { data: resumo, isLoading: loadResumo } = trpc.relatorios.resumoMensal.useQuery({ mes: Number(mes), ano: Number(ano) });
   const { data: anuaisRaw, isLoading: loadAnual } = trpc.relatorios.resumoAnual.useQuery({ ano: Number(ano) });
-  const { data: catData, isLoading: loadCat } = trpc.relatorios.despesasPorCategoria.useQuery({ mes: Number(mes), ano: Number(ano) });
+  const { data: catRaw, isLoading: loadCat } = trpc.relatorios.despesasPorCategoria.useQuery({ mes: Number(mes), ano: Number(ano) });
 
   const anuais = (anuaisRaw ?? []).map((m: any) => ({ ...m, nome: MESES_ABREV[m.mes] }));
+  const catData = ((catRaw as any[]) ?? []).map((c: any) => ({
+    ...c,
+    total: Number(c.total),
+    categoriaNome: c.categoriaNome ?? "Sem categoria",
+  })).filter((c: any) => c.total > 0);
 
   return (
     <div className="space-y-6">

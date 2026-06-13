@@ -18,10 +18,10 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</p>
-            <p className="text-2xl font-bold tracking-tight">{value}</p>
+            <p className="text-lg sm:text-2xl font-bold tracking-tight tabular-nums">{value}</p>
             {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
           </div>
-          <div className={`h-10 w-10 rounded-xl flex items-center justify-center ${color}`}>
+          <div className={`h-8 w-8 sm:h-10 sm:w-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
             <Icon className="h-5 w-5 text-white" />
           </div>
         </div>
@@ -100,10 +100,10 @@ export default function Dashboard() {
   const hoje = new Date();
   const mesAtual = MESES[hoje.getMonth()];
 
-  if (isLoading) return (
-    <div className="space-y-6">
+  if (isLoading)   return (
+    <div className="space-y-4 sm:space-y-6">
       <Skeleton className="h-8 w-48" />
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-28" />)}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -134,17 +134,17 @@ export default function Dashboard() {
   const atrasoReceitas = stats?.atrasoReceitas ?? [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">{mesAtual} {hoje.getFullYear()} — Visão geral financeira</p>
+          <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">{mesAtual} {hoje.getFullYear()} — Visão geral financeira</p>
         </div>
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" />
         <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" />
         <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
@@ -152,17 +152,17 @@ export default function Dashboard() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold">Receitas × Despesas — {hoje.getFullYear()}</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={anuais} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
+          <CardContent className="px-2 sm:px-6">
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={anuais} margin={{ top: 4, right: 4, left: -24, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="nome" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
+                <XAxis dataKey="nome" tick={{ fontSize: 10 }} />
+                <YAxis tick={{ fontSize: 10 }} tickFormatter={(v) => `R$${(v/1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: any) => fmt(v)} />
                 <Bar dataKey="receitas" name="Receitas" fill="#10b981" radius={[3,3,0,0]} />
                 <Bar dataKey="despesas" name="Despesas" fill="#ef4444" radius={[3,3,0,0]} />
@@ -194,7 +194,7 @@ export default function Dashboard() {
       </div>
 
       {/* Próximos vencimentos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
         <Card>
           <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-semibold flex items-center gap-2">

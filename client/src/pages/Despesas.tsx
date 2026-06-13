@@ -122,23 +122,23 @@ export default function Despesas() {
       </div>
 
       {/* Resumo */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-3 gap-2">
         <Card className="bg-red-50 border-red-100">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-red-600 font-medium uppercase tracking-wide">Total</p>
-            <p className="text-lg font-bold text-red-700">{fmt(total)}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-[10px] text-red-600 font-medium uppercase tracking-wide">Total</p>
+            <p className="text-sm sm:text-base font-bold text-red-700 tabular-nums">{fmt(total)}</p>
           </CardContent>
         </Card>
         <Card className="bg-emerald-50 border-emerald-100">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Pago</p>
-            <p className="text-lg font-bold text-emerald-700">{fmt(totalPago)}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Pago</p>
+            <p className="text-sm sm:text-base font-bold text-emerald-700 tabular-nums">{fmt(totalPago)}</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-50 border-amber-100">
-          <CardContent className="p-4 text-center">
-            <p className="text-xs text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
-            <p className="text-lg font-bold text-amber-700">{fmt(totalPendente)}</p>
+          <CardContent className="p-3 text-center">
+            <p className="text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
+            <p className="text-sm sm:text-base font-bold text-amber-700 tabular-nums">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
       </div>
@@ -210,21 +210,29 @@ export default function Despesas() {
                   >
                     <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className={`text-sm font-medium truncate ${isPendente ? "text-amber-900" : ""}`}>{item.descricao}</p>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className={`text-sm font-medium truncate max-w-[180px] sm:max-w-none ${isPendente ? "text-amber-900" : ""}`}>{item.descricao}</p>
                         <RecorrenciaBadge item={item} />
                       </div>
-                      <p className={`text-xs ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
-                        {item.categoriaNome ?? "Sem categoria"}
-                        {item.formaPagamento ? ` · ${item.formaPagamento}` : ""}
-                        {item.dataVencimento
-                          ? ` · vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
-                          : item.diaVencimento ? ` · dia ${item.diaVencimento}` : ""}
-                        {item.recorrente && item.totalParcelas != null && item.parcelaAtual != null
-                          ? ` · Parcela ${item.parcelaAtual}/${item.totalParcelas}`
-                          : ""}
-                        {` · ${MESES[item.mes]}/${item.ano}`}
-                      </p>
+                      <div className={`text-xs flex flex-wrap gap-x-1 gap-y-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                        <span>{item.categoriaNome ?? "Sem categoria"}</span>
+                        {item.formaPagamento && <><span>·</span><span>{item.formaPagamento}</span></>}
+                        {(item.dataVencimento || item.diaVencimento) && (
+                          <><span>·</span><span className="hidden sm:inline">
+                            {item.dataVencimento
+                              ? `vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
+                              : `dia ${item.diaVencimento}`}
+                          </span><span className="sm:hidden">
+                            {item.dataVencimento
+                              ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                              : `dia ${item.diaVencimento}`}
+                          </span></>
+                        )}
+                        {item.recorrente && item.totalParcelas != null && item.parcelaAtual != null && (
+                          <><span>·</span><span>Parcela {item.parcelaAtual}/{item.totalParcelas}</span></>
+                        )}
+                        <><span>·</span><span>{MESES[item.mes]}/{item.ano}</span></>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-sm font-semibold ${isPendente ? "text-amber-700" : "text-red-600"}`}>
@@ -240,7 +248,7 @@ export default function Despesas() {
                       ) : (
                         <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">Pago</Badge>
                       )}
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         {isPendente && can("mark_paid") && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como pago">
                             <Check className="h-3.5 w-3.5" />

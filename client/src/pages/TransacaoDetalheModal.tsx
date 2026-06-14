@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Pencil, Check, RotateCcw, CalendarDays, Tag, CreditCard,
-  FileText, Repeat, Infinity, TrendingDown, TrendingUp,
+  FileText, Repeat, Infinity, TrendingDown, TrendingUp, ExternalLink,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
+import { Link } from "wouter";
 
 const MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -19,6 +20,8 @@ interface TransacaoDetalheModalProps {
   onClose: () => void;
   onEdit: (item: any) => void;
   onRefresh: () => void;
+  /** Quando true, substitui o botão Editar por um link "Ver em [Despesas/Receitas]" */
+  editAsLink?: boolean;
 }
 
 function StatusBadgeLg({ status, tipo }: { status: string; tipo: string }) {
@@ -43,7 +46,7 @@ function StatusBadgeLg({ status, tipo }: { status: string; tipo: string }) {
   );
 }
 
-export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh }: TransacaoDetalheModalProps) {
+export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, editAsLink }: TransacaoDetalheModalProps) {
   const utils = trpc.useUtils();
   const { can } = usePermissions();
 
@@ -217,16 +220,25 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh }
 
             <div className="flex-1" />
 
-            {/* Editar */}
+            {/* Editar / Ver na página */}
             {can("edit_lancamentos") && (
-              <Button
-                size="sm"
-                className="gap-1.5"
-                onClick={() => { onClose(); onEdit(item); }}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Editar
-              </Button>
+              editAsLink ? (
+                <Link href={item?.tipo === "receita" ? "/receitas" : "/despesas"}>
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={onClose}>
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    Ver {item?.tipo === "receita" ? "Receitas" : "Despesas"}
+                  </Button>
+                </Link>
+              ) : (
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => { onClose(); onEdit(item); }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  Editar
+                </Button>
+              )
             )}
           </div>
         </div>

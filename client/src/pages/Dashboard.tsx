@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -36,7 +38,17 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
   );
 }
 
-function VencimentoLista({ items, tipo, atraso = false }: { items: any[]; tipo: "despesa" | "receita"; atraso?: boolean }) {
+function VencimentoLista({
+  items,
+  tipo,
+  atraso = false,
+  onItemClick,
+}: {
+  items: any[];
+  tipo: "despesa" | "receita";
+  atraso?: boolean;
+  onItemClick: (item: any) => void;
+}) {
   const isDespesa = tipo === "despesa";
   const defaultColor = isDespesa ? "#ef4444" : "#10b981";
 
@@ -52,9 +64,10 @@ function VencimentoLista({ items, tipo, atraso = false }: { items: any[]; tipo: 
       {items.map((v: any) => (
         <div
           key={v.id}
-          className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors ${
+          onClick={() => onItemClick({ ...v, tipo })}
+          className={`flex items-center justify-between py-2 px-3 rounded-lg transition-colors cursor-pointer ${
             atraso
-              ? "bg-red-50/80 hover:bg-red-50 border border-red-100"
+              ? "bg-red-50/80 hover:bg-red-100 border border-red-100"
               : "bg-muted/50 hover:bg-muted"
           }`}
         >
@@ -96,11 +109,20 @@ function VencimentoLista({ items, tipo, atraso = false }: { items: any[]; tipo: 
 const COLORS = ["#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16"];
 
 export default function Dashboard() {
-  const { data: stats, isLoading } = trpc.relatorios.dashboard.useQuery();
+  const { data: stats, isLoading, refetch } = trpc.relatorios.dashboard.useQuery();
+  const utils = trpc.useUtils();
   const hoje = new Date();
   const mesAtual = MESES[hoje.getMonth()];
 
-  if (isLoading)   return (
+  const [detalheItem, setDetalheItem] = useState<any>(null);
+
+  const handleRefresh = () => {
+    utils.transacoes.list.invalidate();
+    utils.relatorios.dashboard.invalidate();
+    refetch();
+  };
+
+  if (isLoading) return (
     <div className="space-y-4 sm:space-y-6">
       <Skeleton className="h-8 w-48" />
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -211,7 +233,7 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <VencimentoLista items={vencimentosDespesas} tipo="despesa" />
+            <VencimentoLista items={vencimentosDespesas} tipo="despesa" onItemClick={setDetalheItem} />
           </CardContent>
         </Card>
 
@@ -231,7 +253,7 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <VencimentoLista items={vencimentosReceitas} tipo="receita" />
+            <VencimentoLista items={vencimentosReceitas} tipo="receita" onItemClick={setDetalheItem} />
           </CardContent>
         </Card>
       </div>
@@ -254,7 +276,7 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <VencimentoLista items={atrasoDespesas} tipo="despesa" atraso />
+            <VencimentoLista items={atrasoDespesas} tipo="despesa" atraso onItemClick={setDetalheItem} />
           </CardContent>
         </Card>
 
@@ -274,10 +296,20 @@ export default function Dashboard() {
             </Link>
           </CardHeader>
           <CardContent>
-            <VencimentoLista items={atrasoReceitas} tipo="receita" atraso />
+            <VencimentoLista items={atrasoReceitas} tipo="receita" atraso onItemClick={setDetalheItem} />
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de detalhe */}
+      <TransacaoDetalheModal
+        open={detalheItem !== null}
+        item={detalheItem}
+        onClose={() => setDetalheItem(null)}
+        onEdit={() => setDetalheItem(null)}
+        onRefresh={handleRefresh}
+        editAsLink
+      />
     </div>
   );
 }

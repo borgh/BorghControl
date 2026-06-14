@@ -21,21 +21,30 @@ function RecorrenciaBadge({ item }: { item: any }) {
   if (!item.recorrente) return null;
   if (item.totalParcelas == null) {
     return (
-      <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50">
+      <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">
         <Infinity className="h-2.5 w-2.5" /> Contrato
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50">
+    <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50 shrink-0">
       <Repeat className="h-2.5 w-2.5" /> {item.parcelaAtual}/{item.totalParcelas}
     </Badge>
   );
 }
 
+function StatusBadge({ item }: { item: any }) {
+  if (item.status === "pendente") {
+    return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100 shrink-0">Pendente</Badge>;
+  }
+  if (item.status === "cancelado") {
+    return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground shrink-0">Cancelado</Badge>;
+  }
+  return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">Pago</Badge>;
+}
+
 export default function Despesas() {
   const hoje = new Date();
-  // Padrão: mês e ano atuais
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
   const [status, setStatus] = useState("todos");
@@ -106,7 +115,7 @@ export default function Despesas() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-red-100 flex items-center justify-center">
+          <div className="h-9 w-9 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
             <TrendingDown className="h-5 w-5 text-red-600" />
           </div>
           <div>
@@ -126,19 +135,19 @@ export default function Despesas() {
         <Card className="bg-red-50 border-red-100">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-red-600 font-medium uppercase tracking-wide">Total</p>
-            <p className="text-sm sm:text-base font-bold text-red-700 tabular-nums">{fmt(total)}</p>
+            <p className="text-xs sm:text-sm font-bold text-red-700 tabular-nums leading-tight">{fmt(total)}</p>
           </CardContent>
         </Card>
         <Card className="bg-emerald-50 border-emerald-100">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Pago</p>
-            <p className="text-sm sm:text-base font-bold text-emerald-700 tabular-nums">{fmt(totalPago)}</p>
+            <p className="text-xs sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight">{fmt(totalPago)}</p>
           </CardContent>
         </Card>
         <Card className="bg-amber-50 border-amber-100">
           <CardContent className="p-3 text-center">
             <p className="text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
-            <p className="text-sm sm:text-base font-bold text-amber-700 tabular-nums">{fmt(totalPendente)}</p>
+            <p className="text-xs sm:text-sm font-bold text-amber-700 tabular-nums leading-tight">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
       </div>
@@ -146,37 +155,36 @@ export default function Despesas() {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3">
-            <div className="relative flex-1 min-w-[180px]">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9" />
+              <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9 w-full" />
             </div>
-            {/* Mês */}
-            <Select value={mes} onValueChange={setMes}>
-              <SelectTrigger className="w-36 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Todos os meses</SelectItem>
-                {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {/* Ano */}
-            <Select value={ano} onValueChange={setAno}>
-              <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">Todos os anos</SelectItem>
-                {anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {/* Status */}
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger className="w-32 h-9"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="pendente">Pendente</SelectItem>
-                <SelectItem value="pago">Pago</SelectItem>
-                <SelectItem value="cancelado">Cancelado</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
+              <Select value={mes} onValueChange={setMes}>
+                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Todos os meses</SelectItem>
+                  {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={ano} onValueChange={setAno}>
+                <SelectTrigger className="h-9 text-xs sm:w-28"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">Todos</SelectItem>
+                  {anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={status} onValueChange={setStatus}>
+                <SelectTrigger className="h-9 text-xs sm:w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="pago">Pago</SelectItem>
+                  <SelectItem value="cancelado">Cancelado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -197,10 +205,18 @@ export default function Despesas() {
               {items.map((item: any) => {
                 const isPendente = item.status === "pendente";
                 const isCancelado = item.status === "cancelado";
+
+                // Formatar data de vencimento de forma compacta
+                const dataVenc = item.dataVencimento
+                  ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+                  : item.diaVencimento
+                    ? `dia ${item.diaVencimento}`
+                    : null;
+
                 return (
                   <div
                     key={item.id}
-                    className={`flex items-center gap-3 px-4 py-3 transition-colors group ${
+                    className={`px-3 py-3 transition-colors group ${
                       isPendente
                         ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
                         : isCancelado
@@ -208,67 +224,64 @@ export default function Despesas() {
                           : "hover:bg-muted/30"
                     }`}
                   >
-                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <p className={`text-sm font-medium truncate max-w-[180px] sm:max-w-none ${isPendente ? "text-amber-900" : ""}`}>{item.descricao}</p>
-                        <RecorrenciaBadge item={item} />
-                      </div>
-                      <div className={`text-xs flex flex-wrap gap-x-1 gap-y-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
-                        <span>{item.categoriaNome ?? "Sem categoria"}</span>
-                        {item.formaPagamento && <><span>·</span><span>{item.formaPagamento}</span></>}
-                        {(item.dataVencimento || item.diaVencimento) && (
-                          <><span>·</span><span className="hidden sm:inline">
-                            {item.dataVencimento
-                              ? `vence ${new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR")}`
-                              : `dia ${item.diaVencimento}`}
-                          </span><span className="sm:hidden">
-                            {item.dataVencimento
-                              ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
-                              : `dia ${item.diaVencimento}`}
-                          </span></>
-                        )}
-                        {item.recorrente && item.totalParcelas != null && item.parcelaAtual != null && (
-                          <><span>·</span><span>Parcela {item.parcelaAtual}/{item.totalParcelas}</span></>
-                        )}
-                        <><span>·</span><span>{MESES[item.mes]}/{item.ano}</span></>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-sm font-semibold ${isPendente ? "text-amber-700" : "text-red-600"}`}>
-                        {fmt(Number(item.valor))}
-                      </span>
-                      {/* Badge de status com cor diferenciada para pendente */}
-                      {isPendente ? (
-                        <Badge className="text-xs bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100">
-                          Pendente
-                        </Badge>
-                      ) : isCancelado ? (
-                        <Badge variant="outline" className="text-xs text-muted-foreground">Cancelado</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-emerald-700 border-emerald-200 bg-emerald-50">Pago</Badge>
-                      )}
-                      <div className="flex gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                        {isPendente && can("mark_paid") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como pago">
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {item.status === "pago" && can("mark_paid") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
-                            <RotateCcw className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {can("edit_lancamentos") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                        {can("delete_lancamentos") && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
+                    {/* Linha 1: ponto de cor + descrição + badges + valor */}
+                    <div className="flex items-start gap-2">
+                      <div className="h-2 w-2 rounded-full mt-1.5 shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          {/* Esquerda: descrição + badges de recorrência */}
+                          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                            <p className={`text-sm font-semibold leading-tight truncate ${isPendente ? "text-amber-900" : ""}`}>
+                              {item.descricao}
+                            </p>
+                            <RecorrenciaBadge item={item} />
+                          </div>
+                          {/* Direita: valor */}
+                          <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-red-600"}`}>
+                            {fmt(Number(item.valor))}
+                          </span>
+                        </div>
+
+                        {/* Linha 2: metadados (categoria · forma · data · mês) + status + ações */}
+                        <div className="flex items-center justify-between gap-2 mt-1">
+                          {/* Metadados compactos */}
+                          <div className={`text-[11px] leading-tight flex flex-wrap items-center gap-x-1 min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                            {item.categoriaNome && <span className="truncate max-w-[90px]">{item.categoriaNome}</span>}
+                            {item.formaPagamento && (
+                              <><span className="opacity-50">·</span><span className="truncate max-w-[70px]">{item.formaPagamento}</span></>
+                            )}
+                            {dataVenc && (
+                              <><span className="opacity-50">·</span><span className="whitespace-nowrap">{dataVenc}</span></>
+                            )}
+                            <span className="opacity-50">·</span>
+                            <span className="whitespace-nowrap">{MESES[item.mes]?.slice(0, 3)}/{item.ano}</span>
+                          </div>
+
+                          {/* Status + botões de ação */}
+                          <div className="flex items-center gap-1 shrink-0">
+                            <StatusBadge item={item} />
+                            {isPendente && can("mark_paid") && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como pago">
+                                <Check className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {item.status === "pago" && can("mark_paid") && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
+                                <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {can("edit_lancamentos") && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setEditItem(item); setModal(true); }}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {can("delete_lancamentos") && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleDeleteClick(item)}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>

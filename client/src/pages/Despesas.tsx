@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
+import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -85,6 +86,7 @@ export default function Despesas() {
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
+  const [detalheItem, setDetalheItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string } | null>(null);
   const [deleteMode, setDeleteMode] = useState<"single" | "group">("single");
 
@@ -265,7 +267,12 @@ export default function Despesas() {
                 return (
                   <div
                     key={item.id}
-                    className={`px-3 py-3 transition-colors group ${
+                    onClick={(e) => {
+                      // Não abre detalhe se clicou em botão de ação
+                      if ((e.target as HTMLElement).closest('button')) return;
+                      setDetalheItem(item);
+                    }}
+                    className={`px-3 py-3 transition-colors group cursor-pointer ${
                       isPendente
                         ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
                         : isCancelado
@@ -328,6 +335,14 @@ export default function Despesas() {
       </Card>
 
       <TransacaoModal open={modal} onClose={() => setModal(false)} tipo="despesa" editItem={editItem} onSuccess={invalidate} />
+
+      <TransacaoDetalheModal
+        open={detalheItem !== null}
+        item={detalheItem}
+        onClose={() => setDetalheItem(null)}
+        onEdit={(it) => { setEditItem(it); setModal(true); }}
+        onRefresh={invalidate}
+      />
 
       {/* Dialog de exclusão */}
       <AlertDialog open={deleteTarget !== null} onOpenChange={(o) => !o && setDeleteTarget(null)}>

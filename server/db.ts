@@ -55,8 +55,8 @@ export async function saveUserPermissions(permissions: Record<string, boolean>):
   const db = await getDb();
   if (!db) throw new Error('DB not available');
   await db.insert(systemConfig)
-    .values({ chave: 'user_permissions', valor: JSON.stringify(permissions) })
-    .onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: new Date() } });
+    .values({ chave: 'user_permissions', valor: JSON.stringify(permissions), updatedAt: Date.now() })
+    .onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: Date.now() } });
 }
 
 export async function listUsers() {

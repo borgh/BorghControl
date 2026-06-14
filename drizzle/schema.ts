@@ -10,6 +10,7 @@ import {
   index,
   serial,
   date,
+  bigint,
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
@@ -87,9 +88,9 @@ export type InsertTransacao = typeof transacoes.$inferInsert;
 // ─── Configurações do Sistema ─────────────────────────────────────────────────
 export const systemConfig = pgTable("system_config", {
   id: serial("id").primaryKey(),
-  chave: varchar("chave", { length: 100 }).notNull().unique(),
-  valor: text("valor").notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+  chave: varchar("config_key", { length: 100 }).notNull().unique(),
+  valor: text("config_value").notNull(),
+  updatedAt: bigint("updated_at", { mode: "number" }),
 });
 
 export type SystemConfig = typeof systemConfig.$inferSelect;

@@ -8,6 +8,7 @@ import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRig
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
+import { TransacaoModal } from "./TransacaoModal";
 
 const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
 const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
@@ -115,6 +116,8 @@ export default function Dashboard() {
   const mesAtual = MESES[hoje.getMonth()];
 
   const [detalheItem, setDetalheItem] = useState<any>(null);
+  const [editItem, setEditItem] = useState<any>(null);
+  const [editModal, setEditModal] = useState(false);
 
   const handleRefresh = () => {
     utils.transacoes.list.invalidate();
@@ -306,9 +309,17 @@ export default function Dashboard() {
         open={detalheItem !== null}
         item={detalheItem}
         onClose={() => setDetalheItem(null)}
-        onEdit={() => setDetalheItem(null)}
+        onEdit={(it) => { setEditItem(it); setEditModal(true); }}
         onRefresh={handleRefresh}
-        editAsLink
+      />
+
+      {/* Modal de edição */}
+      <TransacaoModal
+        open={editModal}
+        onClose={() => { setEditModal(false); setEditItem(null); }}
+        tipo={editItem?.tipo ?? "despesa"}
+        editItem={editItem}
+        onSuccess={handleRefresh}
       />
     </div>
   );

@@ -132,22 +132,22 @@ export default function Receitas() {
 
       {/* Resumo */}
       <div className="grid grid-cols-3 gap-2">
-        <Card className="bg-emerald-50 border-emerald-100">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Total</p>
-            <p className="text-xs sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight">{fmt(total)}</p>
+        <Card className="bg-emerald-50 border-emerald-100 overflow-hidden">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-[9px] sm:text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Total</p>
+            <p className="text-[10px] sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight break-all">{fmt(total)}</p>
           </CardContent>
         </Card>
-        <Card className="bg-emerald-50 border-emerald-100">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Recebido</p>
-            <p className="text-xs sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight">{fmt(totalRecebido)}</p>
+        <Card className="bg-emerald-50 border-emerald-100 overflow-hidden">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-[9px] sm:text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Recebido</p>
+            <p className="text-[10px] sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight break-all">{fmt(totalRecebido)}</p>
           </CardContent>
         </Card>
-        <Card className="bg-amber-50 border-amber-100">
-          <CardContent className="p-3 text-center">
-            <p className="text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
-            <p className="text-xs sm:text-sm font-bold text-amber-700 tabular-nums leading-tight">{fmt(totalPendente)}</p>
+        <Card className="bg-amber-50 border-amber-100 overflow-hidden">
+          <CardContent className="p-2 sm:p-3 text-center">
+            <p className="text-[9px] sm:text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
+            <p className="text-[10px] sm:text-sm font-bold text-amber-700 tabular-nums leading-tight break-all">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
       </div>
@@ -160,7 +160,7 @@ export default function Receitas() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9 w-full" />
             </div>
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
               <Select value={mes} onValueChange={setMes}>
                 <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -244,18 +244,10 @@ export default function Receitas() {
 
                         {/* Linha 2: metadados + status + ações */}
                         <div className="flex items-center justify-between gap-2 mt-1">
-                          {/* Metadados compactos */}
-                          <div className={`text-[11px] leading-tight flex flex-wrap items-center gap-x-1 min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
-                            {item.categoriaNome && <span className="truncate max-w-[90px]">{item.categoriaNome}</span>}
-                            {item.formaPagamento && (
-                              <><span className="opacity-50">·</span><span className="truncate max-w-[70px]">{item.formaPagamento}</span></>
-                            )}
-                            {dataVenc && (
-                              <><span className="opacity-50">·</span><span className="whitespace-nowrap">{dataVenc}</span></>
-                            )}
-                            <span className="opacity-50">·</span>
-                            <span className="whitespace-nowrap">{MESES[item.mes]?.slice(0, 3)}/{item.ano}</span>
-                          </div>
+                          {/* Metadados compactos — linha única com truncate */}
+                          <p className={`text-[11px] leading-tight truncate min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                            {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
+                          </p>
 
                           {/* Status + botões de ação */}
                           <div className="flex items-center gap-1 shrink-0">

@@ -17,6 +17,39 @@ import {
 const MESES = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
+type OrdemKey = "vencimento_asc" | "vencimento_desc" | "valor_asc" | "valor_desc" | "descricao_asc" | "descricao_desc" | "status";
+
+function sortItems(items: any[], ordem: OrdemKey): any[] {
+  return [...items].sort((a, b) => {
+    switch (ordem) {
+      case "vencimento_asc": {
+        const da = a.dataVencimento ?? `${a.ano}-${String(a.mes).padStart(2,"0")}-${String(a.diaVencimento ?? 1).padStart(2,"0")}`;
+        const db = b.dataVencimento ?? `${b.ano}-${String(b.mes).padStart(2,"0")}-${String(b.diaVencimento ?? 1).padStart(2,"0")}`;
+        return da < db ? -1 : da > db ? 1 : 0;
+      }
+      case "vencimento_desc": {
+        const da = a.dataVencimento ?? `${a.ano}-${String(a.mes).padStart(2,"0")}-${String(a.diaVencimento ?? 1).padStart(2,"0")}`;
+        const db = b.dataVencimento ?? `${b.ano}-${String(b.mes).padStart(2,"0")}-${String(b.diaVencimento ?? 1).padStart(2,"0")}`;
+        return da > db ? -1 : da < db ? 1 : 0;
+      }
+      case "valor_asc":
+        return Number(a.valor) - Number(b.valor);
+      case "valor_desc":
+        return Number(b.valor) - Number(a.valor);
+      case "descricao_asc":
+        return (a.descricao ?? "").localeCompare(b.descricao ?? "", "pt-BR");
+      case "descricao_desc":
+        return (b.descricao ?? "").localeCompare(a.descricao ?? "", "pt-BR");
+      case "status": {
+        const order: Record<string, number> = { pendente: 0, pago: 1, cancelado: 2 };
+        return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+      }
+      default:
+        return 0;
+    }
+  });
+}
+
 function RecorrenciaBadge({ item }: { item: any }) {
   if (!item.recorrente) return null;
   if (item.totalParcelas == null) {
@@ -49,6 +82,7 @@ export default function Receitas() {
   const [ano, setAno] = useState(String(hoje.getFullYear()));
   const [status, setStatus] = useState("todos");
   const [busca, setBusca] = useState("");
+  const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string } | null>(null);
@@ -89,10 +123,11 @@ export default function Receitas() {
   });
 
   const { can } = usePermissions();
-  const items = data?.items ?? [];
-  const total = items.reduce((s: number, i: any) => s + Number(i.valor), 0);
-  const totalRecebido = items.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
-  const totalPendente = items.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const rawItems = data?.items ?? [];
+  const items = useMemo(() => sortItems(rawItems, ordem), [rawItems, ordem]);
+  const total = rawItems.reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalRecebido = rawItems.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalPendente = rawItems.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
 
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
@@ -156,10 +191,12 @@ export default function Receitas() {
       <Card>
         <CardContent className="p-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+            {/* Busca */}
             <div className="relative flex-1 min-w-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9 w-full" />
             </div>
+            {/* Mês / Ano / Status / Ordenação */}
             <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
               <Select value={mes} onValueChange={setMes}>
                 <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
@@ -184,6 +221,19 @@ export default function Receitas() {
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Ordenação */}
+              <Select value={ordem} onValueChange={(v) => setOrdem(v as OrdemKey)}>
+                <SelectTrigger className="h-9 text-xs sm:w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vencimento_asc">Vencimento ↑</SelectItem>
+                  <SelectItem value="vencimento_desc">Vencimento ↓</SelectItem>
+                  <SelectItem value="valor_asc">Valor ↑</SelectItem>
+                  <SelectItem value="valor_desc">Valor ↓</SelectItem>
+                  <SelectItem value="descricao_asc">Descrição A→Z</SelectItem>
+                  <SelectItem value="descricao_desc">Descrição Z→A</SelectItem>
+                  <SelectItem value="status">Status</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -206,7 +256,6 @@ export default function Receitas() {
                 const isPendente = item.status === "pendente";
                 const isCancelado = item.status === "cancelado";
 
-                // Formatar data de vencimento de forma compacta
                 const dataVenc = item.dataVencimento
                   ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
                   : item.diaVencimento
@@ -224,32 +273,26 @@ export default function Receitas() {
                           : "hover:bg-muted/30"
                     }`}
                   >
-                    {/* Linha 1: ponto de cor + descrição + badges + valor */}
                     <div className="flex items-start gap-2">
                       <div className="h-2 w-2 rounded-full mt-1.5 shrink-0" style={{ background: item.categoriaCor ?? "#94a3b8" }} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          {/* Esquerda: descrição + badges de recorrência */}
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                             <p className={`text-sm font-semibold leading-tight truncate ${isPendente ? "text-amber-900" : ""}`}>
                               {item.descricao}
                             </p>
                             <RecorrenciaBadge item={item} />
                           </div>
-                          {/* Direita: valor */}
                           <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-emerald-600"}`}>
                             {fmt(Number(item.valor))}
                           </span>
                         </div>
 
-                        {/* Linha 2: metadados + status + ações */}
                         <div className="flex items-center justify-between gap-2 mt-1">
-                          {/* Metadados compactos — linha única com truncate */}
                           <p className={`text-[11px] leading-tight truncate min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
                             {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
                           </p>
 
-                          {/* Status + botões de ação */}
                           <div className="flex items-center gap-1 shrink-0">
                             <StatusBadge item={item} />
                             {isPendente && can("mark_paid") && (

@@ -174,6 +174,24 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, 
               </div>
             </div>
 
+            {/* Nota Fiscal (somente receitas) */}
+            {item.tipo === "receita" && (
+              <div className="flex items-start gap-3">
+                <FileText className={`h-4 w-4 mt-0.5 shrink-0 ${item.emitirNF ? "text-blue-500" : "text-muted-foreground"}`} />
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Nota Fiscal</p>
+                  {item.emitirNF ? (
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700">
+                      Emitir NF
+                      <span className="h-2 w-2 rounded-full bg-blue-500 inline-block" />
+                    </span>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Sem nota fiscal</p>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Observação */}
             {item.observacao && (
               <>

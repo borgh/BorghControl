@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity, FileText } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -83,6 +83,7 @@ export default function Receitas() {
   const [ano, setAno] = useState(String(hoje.getFullYear()));
   const [status, setStatus] = useState("todos");
   const [busca, setBusca] = useState("");
+  const [filtroNF, setFiltroNF] = useState<"todos" | "sim" | "nao">("todos");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
@@ -103,6 +104,7 @@ export default function Receitas() {
     ano: ano !== "0" ? Number(ano) : undefined,
     status: status !== "todos" ? status as any : undefined,
     busca: busca || undefined,
+    emitirNF: filtroNF === "sim" ? true : filtroNF === "nao" ? false : undefined,
   });
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };
@@ -223,6 +225,15 @@ export default function Receitas() {
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Nota Fiscal */}
+              <Select value={filtroNF} onValueChange={(v) => setFiltroNF(v as any)}>
+                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas as NFs</SelectItem>
+                  <SelectItem value="sim">Emite NF</SelectItem>
+                  <SelectItem value="nao">Sem NF</SelectItem>
+                </SelectContent>
+              </Select>
               {/* Ordenação */}
               <Select value={ordem} onValueChange={(v) => setOrdem(v as OrdemKey)}>
                 <SelectTrigger className="h-9 text-xs sm:w-44"><SelectValue /></SelectTrigger>
@@ -288,6 +299,11 @@ export default function Receitas() {
                               {item.descricao}
                             </p>
                             <RecorrenciaBadge item={item} />
+                            {item.emitirNF && (
+                              <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50 shrink-0">
+                                <FileText className="h-2.5 w-2.5" /> NF
+                              </Badge>
+                            )}
                           </div>
                           <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-emerald-600"}`}>
                             {fmt(Number(item.valor))}

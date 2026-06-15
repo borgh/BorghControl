@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList } from "lucide-react";
+import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList, FileText } from "lucide-react";
 
 interface TransacaoModalProps {
   open: boolean;
@@ -118,6 +118,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
   }
 
   const [tipoRecorrencia, setTipoRecorrencia] = useState<TipoRecorrencia>("unico");
+  const [emitirNF, setEmitirNF] = useState(false);
   const [form, setForm] = useState({
     descricao: "",
     valor: "",
@@ -143,6 +144,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
         dataVenc = `${editItem.ano}-${String(editItem.mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
       }
       setTipoRecorrencia(getTipoRecorrencia(editItem));
+      setEmitirNF(editItem.emitirNF ?? false);
       setForm({
         descricao: editItem.descricao ?? "",
         valor: String(editItem.valor ?? ""),
@@ -156,6 +158,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
     } else {
       const d = new Date();
       setTipoRecorrencia("unico");
+      setEmitirNF(false);
       setForm({
         descricao: "",
         valor: "",
@@ -263,6 +266,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       observacao: form.observacao || undefined,
       recorrente,
       totalParcelas,
+      emitirNF: tipo === "receita" ? emitirNF : undefined,
     };
 
     if (editItem) {
@@ -287,6 +291,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           observacao: data.observacao,
           recorrente: true,
           totalParcelas: totalParcelas ?? null,
+          emitirNF: tipo === "receita" ? emitirNF : undefined,
         };
         setPendingData(payload);
         setEscopoDialogOpen(true);
@@ -309,6 +314,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           recorrente: true,
           totalParcelas: totalParcelas ?? null,
           escopo: "este_e_futuros",
+          emitirNF: tipo === "receita" ? emitirNF : undefined,
         });
       }
     } else {
@@ -468,6 +474,40 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
                 </Select>
               </div>
             </div>
+
+            {/* Nota Fiscal (somente receitas) */}
+            {tipo === "receita" && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setEmitirNF((v) => !v)}
+                onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setEmitirNF((v) => !v)}
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer select-none transition-all ${
+                  emitirNF
+                    ? "border-blue-400 bg-blue-50 ring-1 ring-blue-400"
+                    : "border-border hover:border-muted-foreground/40"
+                }`}
+              >
+                <div className={`flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0 ${
+                  emitirNF ? "bg-blue-100 text-blue-600" : "bg-muted text-muted-foreground"
+                }`}>
+                  <FileText className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${emitirNF ? "text-blue-700" : "text-foreground"}`}>
+                    {emitirNF ? "Emitir Nota Fiscal" : "Sem Nota Fiscal"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {emitirNF ? "Esta receita requer emissão de NF" : "Clique para marcar como necessita NF"}
+                  </p>
+                </div>
+                <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                  emitirNF ? "border-blue-500 bg-blue-500" : "border-muted-foreground/40"
+                }`}>
+                  {emitirNF && <div className="h-2 w-2 rounded-full bg-white" />}
+                </div>
+              </div>
+            )}
 
             {/* Observação */}
             <div className="space-y-1.5">

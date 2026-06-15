@@ -59,7 +59,7 @@ export const appRouter = router({
   }),
   transacoes: router({
     list: publicProcedure
-      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional() }).optional())
+      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional(), emitirNF: z.boolean().optional() }).optional())
       .query(async ({ input }) => listTransacoes(input ?? {})),
     getById: publicProcedure
       .input(z.object({ id: z.number() }))
@@ -81,6 +81,7 @@ export const appRouter = router({
         observacao: z.string().optional(),
         recorrente: z.boolean().optional(),
         totalParcelas: z.number().min(1).max(360).nullable().optional(),
+        emitirNF: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         return createTransacaoComRecorrencia({
@@ -98,6 +99,7 @@ export const appRouter = router({
           observacao: input.observacao,
           recorrente: input.recorrente ?? false,
           totalParcelas: input.recorrente ? (input.totalParcelas ?? null) : undefined,
+          emitirNF: input.emitirNF ?? false,
         });
       }),
     // Editar lançamento: requer permissão edit_lancamentos
@@ -117,6 +119,7 @@ export const appRouter = router({
         formaPagamento: z.string().optional(),
         observacao: z.string().optional(),
         recorrente: z.boolean().optional(),
+        emitirNF: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;
@@ -141,6 +144,7 @@ export const appRouter = router({
         recorrente: z.boolean(),
         totalParcelas: z.number().min(1).max(360).nullable().optional(),
         escopo: z.enum(["apenas_este", "este_e_futuros", "todos"]).optional(),
+        emitirNF: z.boolean().optional(),
       }))
       .mutation(async ({ input }) => {
         const { id, valor, ...rest } = input;

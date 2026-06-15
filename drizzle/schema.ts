@@ -67,6 +67,7 @@ export const transacoes = pgTable(
     formaPagamento: varchar("formaPagamento", { length: 50 }),
     observacao: text("observacao"),
     recorrente: boolean("recorrente").default(false),
+    emitirNF: boolean("emitir_nf").default(false),
     // Campos de controle de recorrência em série
     recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }), // UUID do grupo de parcelas
     totalParcelas: integer("totalParcelas"),   // null = permanente, N = total de parcelas

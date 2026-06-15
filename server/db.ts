@@ -182,7 +182,7 @@ export async function deleteCategoria(id: number) {
 export async function listTransacoes(params: {
   mes?: number; ano?: number; tipo?: "despesa" | "receita";
   status?: "pendente" | "pago" | "cancelado"; busca?: string;
-  limit?: number; offset?: number;
+  limit?: number; offset?: number; emitirNF?: boolean;
 }) {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
@@ -192,6 +192,7 @@ export async function listTransacoes(params: {
   if (params.tipo) conditions.push(eq(transacoes.tipo, params.tipo));
   if (params.status) conditions.push(eq(transacoes.status, params.status));
   if (params.busca) conditions.push(ilike(transacoes.descricao, `%${params.busca}%`));
+  if (params.emitirNF !== undefined) conditions.push(eq(transacoes.emitirNF, params.emitirNF));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const limit = params.limit ?? 100;
   const offset = params.offset ?? 0;
@@ -203,6 +204,7 @@ export async function listTransacoes(params: {
       mes: transacoes.mes, ano: transacoes.ano,
       categoriaId: transacoes.categoriaId, formaPagamento: transacoes.formaPagamento,
       observacao: transacoes.observacao, recorrente: transacoes.recorrente,
+      emitirNF: transacoes.emitirNF,
       recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
       totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
       createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
@@ -333,6 +335,7 @@ export async function createTransacaoComRecorrencia(data: {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: grupoId,
       totalParcelas: data.totalParcelas ?? null,
       parcelaAtual: i + 1,
@@ -393,6 +396,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   recorrente: boolean;
   totalParcelas?: number | null;
   escopo?: "apenas_este" | "este_e_futuros" | "todos";
+  emitirNF?: boolean;
 }) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
@@ -420,6 +424,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: false,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: null,
       totalParcelas: null,
       parcelaAtual: null,
@@ -445,6 +450,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       updatedAt: new Date(),
     }).where(eq(transacoes.id, id)).returning();
     return { updated: result[0], created: [], grupoId: registroAtual.recorrenciaGrupoId };
@@ -468,6 +474,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
         categoriaId: data.categoriaId ?? null,
         formaPagamento: data.formaPagamento ?? null,
         observacao: data.observacao ?? null,
+        emitirNF: data.emitirNF ?? false,
         totalParcelas: data.totalParcelas ?? null,
         updatedAt: new Date(),
       }).where(eq(transacoes.id, t.id));
@@ -510,6 +517,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
     formaPagamento: data.formaPagamento ?? null,
     observacao: data.observacao ?? null,
     recorrente: true,
+    emitirNF: data.emitirNF ?? false,
     recorrenciaGrupoId: grupoId,
     totalParcelas: data.totalParcelas ?? null,
     parcelaAtual: 1,
@@ -549,6 +557,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: grupoId,
       totalParcelas: data.totalParcelas ?? null,
       parcelaAtual: i + 1,

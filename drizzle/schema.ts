@@ -68,6 +68,7 @@ export const transacoes = pgTable(
     observacao: text("observacao"),
     recorrente: boolean("recorrente").default(false),
     emitirNF: boolean("emitir_nf").default(false),
+    prioridade: boolean("prioridade").notNull().default(false),
     // Campos de controle de recorrência em série
     recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }), // UUID do grupo de parcelas
     totalParcelas: integer("totalParcelas"),   // null = permanente, N = total de parcelas

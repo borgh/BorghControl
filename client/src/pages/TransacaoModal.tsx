@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList, FileText } from "lucide-react";
+import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList, FileText, Flame } from "lucide-react";
 
 interface TransacaoModalProps {
   open: boolean;
@@ -119,6 +119,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
 
   const [tipoRecorrencia, setTipoRecorrencia] = useState<TipoRecorrencia>("unico");
   const [emitirNF, setEmitirNF] = useState(false);
+  const [prioridade, setPrioridade] = useState(false);
   const [form, setForm] = useState({
     descricao: "",
     valor: "",
@@ -145,6 +146,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       }
       setTipoRecorrencia(getTipoRecorrencia(editItem));
       setEmitirNF(editItem.emitirNF ?? false);
+      setPrioridade(editItem.prioridade ?? false);
       setForm({
         descricao: editItem.descricao ?? "",
         valor: String(editItem.valor ?? ""),
@@ -159,6 +161,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       const d = new Date();
       setTipoRecorrencia("unico");
       setEmitirNF(false);
+      setPrioridade(false);
       setForm({
         descricao: "",
         valor: "",
@@ -267,6 +270,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       recorrente,
       totalParcelas,
       emitirNF: tipo === "receita" ? emitirNF : undefined,
+      prioridade: tipo === "despesa" ? prioridade : undefined,
     };
 
     if (editItem) {
@@ -292,6 +296,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           recorrente: true,
           totalParcelas: totalParcelas ?? null,
           emitirNF: tipo === "receita" ? emitirNF : undefined,
+          prioridade: tipo === "despesa" ? prioridade : undefined,
         };
         setPendingData(payload);
         setEscopoDialogOpen(true);
@@ -315,6 +320,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           totalParcelas: totalParcelas ?? null,
           escopo: "este_e_futuros",
           emitirNF: tipo === "receita" ? emitirNF : undefined,
+          prioridade: tipo === "despesa" ? prioridade : undefined,
         });
       }
     } else {
@@ -474,6 +480,40 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
                 </Select>
               </div>
             </div>
+
+            {/* Prioridade (somente despesas) */}
+            {tipo === "despesa" && (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setPrioridade((v) => !v)}
+                onKeyDown={(e) => (e.key === " " || e.key === "Enter") && setPrioridade((v) => !v)}
+                className={`flex items-center gap-3 rounded-lg border px-4 py-3 cursor-pointer select-none transition-all ${
+                  prioridade
+                    ? "border-orange-400 bg-orange-50 ring-1 ring-orange-400"
+                    : "border-border hover:border-muted-foreground/40"
+                }`}
+              >
+                <div className={`flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0 ${
+                  prioridade ? "bg-orange-100 text-orange-600" : "bg-muted text-muted-foreground"
+                }`}>
+                  <Flame className="h-4 w-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-semibold ${prioridade ? "text-orange-700" : "text-foreground"}`}>
+                    {prioridade ? "Alta Prioridade" : "Prioridade Normal"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {prioridade ? "Esta despesa é de alta prioridade" : "Clique para marcar como alta prioridade"}
+                  </p>
+                </div>
+                <div className={`h-5 w-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                  prioridade ? "border-orange-500 bg-orange-500" : "border-muted-foreground/40"
+                }`}>
+                  {prioridade && <div className="h-2 w-2 rounded-full bg-white" />}
+                </div>
+              </div>
+            )}
 
             {/* Nota Fiscal (somente receitas) */}
             {tipo === "receita" && (

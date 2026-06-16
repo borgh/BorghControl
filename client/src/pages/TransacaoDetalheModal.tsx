@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Pencil, Check, RotateCcw, CalendarDays, Tag, CreditCard,
-  FileText, Repeat, Infinity, TrendingDown, TrendingUp, ExternalLink,
+  FileText, Repeat, Infinity, TrendingDown, TrendingUp, ExternalLink, Flame,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -173,6 +173,24 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, 
                 <p className="text-sm font-medium">{tipoRecorrencia}</p>
               </div>
             </div>
+
+            {/* Prioridade (somente despesas) */}
+            {item.tipo === "despesa" && (
+              <div className="flex items-start gap-3">
+                <Flame className={`h-4 w-4 mt-0.5 shrink-0 ${item.prioridade ? "text-orange-500" : "text-muted-foreground"}`} />
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Prioridade</p>
+                  {item.prioridade ? (
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-orange-700">
+                      Alta Prioridade
+                      <span className="h-2 w-2 rounded-full bg-orange-500 inline-block" />
+                    </span>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">Prioridade normal</p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Nota Fiscal (somente receitas) */}
             {item.tipo === "receita" && (

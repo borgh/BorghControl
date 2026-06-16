@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -84,6 +84,7 @@ export default function Despesas() {
   const [status, setStatus] = useState("todos");
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
+  const [filtroPrioridade, setFiltroPrioridade] = useState("todos");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [detalheItem, setDetalheItem] = useState<any>(null);
@@ -103,6 +104,7 @@ export default function Despesas() {
     ano: ano !== "0" ? Number(ano) : undefined,
     status: status !== "todos" ? status as any : undefined,
     busca: busca || undefined,
+    prioridade: filtroPrioridade === "sim" ? true : filtroPrioridade === "nao" ? false : undefined,
   });
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };
@@ -223,6 +225,15 @@ export default function Despesas() {
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
               </Select>
+              {/* Prioridade */}
+              <Select value={filtroPrioridade} onValueChange={setFiltroPrioridade}>
+                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todas</SelectItem>
+                  <SelectItem value="sim">🔥 Alta Prioridade</SelectItem>
+                  <SelectItem value="nao">Prioridade Normal</SelectItem>
+                </SelectContent>
+              </Select>
               {/* Ordenação */}
               <Select value={ordem} onValueChange={(v) => setOrdem(v as OrdemKey)}>
                 <SelectTrigger className="h-9 text-xs sm:w-44"><SelectValue /></SelectTrigger>
@@ -289,6 +300,11 @@ export default function Despesas() {
                               {item.descricao}
                             </p>
                             <RecorrenciaBadge item={item} />
+                            {item.prioridade && (
+                              <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-orange-700 border-orange-300 bg-orange-50 shrink-0">
+                                <Flame className="h-2.5 w-2.5" /> Prioridade
+                              </Badge>
+                            )}
                           </div>
                           <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-red-600"}`}>
                             {fmt(Number(item.valor))}

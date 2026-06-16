@@ -25,17 +25,17 @@ fi
 
 cd "$REPO_DIR"
 
-echo ">>> Instalando ferramentas de build globalmente..."
-npm install -g esbuild@0.25.0 vite@7.1.7 2>&1 | tail -3
+echo ">>> Instalando dependências (incluindo devDependencies)..."
+npm install --include=dev --legacy-peer-deps 2>&1 | tail -5
 
-echo ">>> Instalando dependências do projeto..."
-npm install --legacy-peer-deps 2>&1 | tail -5
+echo ">>> Verificando ferramentas de build..."
+ls node_modules/.bin/vite node_modules/.bin/esbuild 2>/dev/null || echo "AVISO: ferramentas nao encontradas em node_modules/.bin/"
 
 echo ">>> Buildando frontend (Vite)..."
-NODE_ENV=production vite build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
+NODE_ENV=production ./node_modules/.bin/vite build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
 
 echo ">>> Buildando servidor (esbuild)..."
-esbuild server/_core/index.ts \
+./node_modules/.bin/esbuild server/_core/index.ts \
   --platform=node \
   --bundle \
   --format=cjs \

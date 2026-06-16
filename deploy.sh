@@ -23,18 +23,20 @@ else
   cd "$REPO_DIR"
 fi
 
-echo ">>> Instalando dependências..."
-npm install --legacy-peer-deps 2>&1 | tail -3
+cd "$REPO_DIR"
+
+echo ">>> Instalando dependências (incluindo devDependencies)..."
+npm install --include=dev --legacy-peer-deps 2>&1 | tail -5
 
 echo ">>> Buildando frontend (Vite)..."
-NODE_ENV=production npx vite build --outDir ../dist/public 2>&1 | tail -5
+NODE_ENV=production npx vite build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
 
 echo ">>> Buildando servidor (esbuild)..."
-node_modules/.bin/esbuild server/_core/index.ts \
+npx esbuild server/_core/index.ts \
   --platform=node \
   --bundle \
   --format=cjs \
-  --outfile=../dist/index.cjs \
+  --outfile="$PROJECT_DIR/dist/index.cjs" \
   --external:pg-native \
   --external:better-sqlite3 \
   --external:mysql2 \
@@ -44,9 +46,14 @@ node_modules/.bin/esbuild server/_core/index.ts \
   --external:@vite/client \
   --external:vite 2>&1 | tail -5
 
+echo ">>> Verificando bundle..."
+ls -lh "$PROJECT_DIR/dist/index.cjs"
+ls -lh "$PROJECT_DIR/dist/public/assets/"*.js 2>/dev/null | head -3
+
 echo ">>> Reiniciando PM2..."
 pm2 restart borghcontrol || pm2 start "$PROJECT_DIR/dist/index.cjs" --name borghcontrol
 
+sleep 3
 echo ""
 echo "=== Deploy concluído! ==="
 pm2 status

@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "wouter";
+import { AnexosDetalheSection } from "@/components/AnexosBadge";
 
 const MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -221,6 +222,14 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, 
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{item.observacao}</p>
                   </div>
                 </div>
+              </>
+            )}
+
+            {/* Anexos (somente despesas) */}
+            {isDespesa && (
+              <>
+                <Separator />
+                <AnexosDetalheSection transacaoId={item.id} />
               </>
             )}
           </div>

@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
+import { AnexosBadge } from "@/components/AnexosBadge";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -305,6 +306,7 @@ export default function Despesas() {
                                 <Flame className="h-2.5 w-2.5" /> Prioridade
                               </Badge>
                             )}
+                            <AnexosBadge transacaoId={item.id} descricao={item.descricao} />
                           </div>
                           <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-red-600"}`}>
                             {fmt(Number(item.valor))}

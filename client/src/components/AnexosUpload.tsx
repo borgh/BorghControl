@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Paperclip, Trash2, Eye, FileText, ImageIcon, Loader2, Upload, X } from "lucide-react";
+import { invalidateAnexosCache } from "@/hooks/useAnexos";
 
 interface Anexo {
   id: number;
@@ -149,6 +150,7 @@ export function AnexosUpload({ transacaoId, onPendingFiles, pendingFiles = [] }:
           return;
         }
         toast.success(`"${file.name}" anexado com sucesso!`);
+        if (transacaoId) invalidateAnexosCache(transacaoId);
       }
       await loadAnexos();
     } catch {
@@ -164,6 +166,7 @@ export function AnexosUpload({ transacaoId, onPendingFiles, pendingFiles = [] }:
       const res = await fetch(`/api/anexos/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error();
       toast.success("Anexo removido.");
+      if (transacaoId) invalidateAnexosCache(transacaoId);
       setAnexos((prev) => prev.filter((a) => a.id !== id));
     } catch {
       toast.error("Erro ao remover anexo.");

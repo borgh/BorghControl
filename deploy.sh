@@ -1,6 +1,5 @@
 #!/bin/bash
 set -e
-
 echo "=== BorghControl Deploy ==="
 echo "Iniciando deploy em: $(date)"
 
@@ -32,17 +31,29 @@ if ! command -v pnpm &> /dev/null; then
 fi
 pnpm --version
 
-echo ">>> Instalando dependencias (incluindo devDependencies)..."
-pnpm install --no-frozen-lockfile 2>&1 | tail -5
+echo ">>> Instalando dependencias..."
+# Limpa node_modules para garantir instalação limpa com hoisted linker
+rm -rf node_modules
+pnpm install --no-frozen-lockfile --node-linker=hoisted 2>&1 | tail -8
 
 echo ">>> Verificando ferramentas de build..."
-ls node_modules/.bin/vite node_modules/.bin/esbuild 2>/dev/null || echo "AVISO: ferramentas nao encontradas em node_modules/.bin/"
+if [ ! -f "node_modules/.bin/vite" ] || [ ! -f "node_modules/.bin/esbuild" ]; then
+  echo "ERRO: ferramentas nao encontradas em node_modules/.bin/"
+  echo "Tentando instalar globalmente..."
+  npm install -g esbuild vite
+  VITE_BIN="vite"
+  ESBUILD_BIN="esbuild"
+else
+  echo "Ferramentas encontradas em node_modules/.bin/"
+  VITE_BIN="./node_modules/.bin/vite"
+  ESBUILD_BIN="./node_modules/.bin/esbuild"
+fi
 
 echo ">>> Buildando frontend (Vite)..."
-NODE_ENV=production ./node_modules/.bin/vite build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
+NODE_ENV=production $VITE_BIN build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
 
 echo ">>> Buildando servidor (esbuild)..."
-./node_modules/.bin/esbuild server/_core/index.ts \
+$ESBUILD_BIN server/_core/index.ts \
   --platform=node \
   --bundle \
   --format=cjs \
@@ -54,7 +65,11 @@ echo ">>> Buildando servidor (esbuild)..."
   --external:tedious \
   --external:sqlite3 \
   --external:@vite/client \
-  --external:vite 2>&1 | tail -5
+  --external:vite \
+  --external:lightningcss \
+  --external:@tailwindcss/oxide \
+  --external:@babel/preset-typescript \
+  --log-level=warning 2>&1 | tail -5
 
 echo ">>> Verificando bundle..."
 ls -lh "$PROJECT_DIR/dist/index.cjs"
@@ -62,8 +77,8 @@ ls -lh "$PROJECT_DIR/dist/public/assets/"*.js 2>/dev/null | head -3
 
 echo ">>> Reiniciando PM2..."
 pm2 restart borghcontrol || pm2 start "$PROJECT_DIR/dist/index.cjs" --name borghcontrol
-
 sleep 3
+
 echo ""
 echo "=== Deploy concluído! ==="
 pm2 status

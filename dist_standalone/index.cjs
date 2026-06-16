@@ -17747,7 +17747,7 @@ var require_finalhandler = __commonJS({
     module2.exports = finalhandler;
     function finalhandler(req, res, options) {
       var opts = options || {};
-      var env = opts.env || process.env.NODE_ENV || "development";
+      var env = opts.env || "production";
       var onerror = opts.onerror;
       return function(err) {
         var headers;
@@ -20941,7 +20941,7 @@ var require_application = __commonJS({
       this.defaultConfiguration();
     };
     app.defaultConfiguration = function defaultConfiguration() {
-      var env = process.env.NODE_ENV || "development";
+      var env = "production";
       this.enable("x-powered-by");
       this.set("etag", "weak");
       this.set("env", env);
@@ -37794,6 +37794,7 @@ var init_schema2 = __esm({
         formaPagamento: varchar("formaPagamento", { length: 50 }),
         observacao: text("observacao"),
         recorrente: boolean4("recorrente").default(false),
+        emitirNF: boolean4("emitir_nf").default(false),
         // Campos de controle de recorrência em série
         recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }),
         // UUID do grupo de parcelas
@@ -37813,9 +37814,9 @@ var init_schema2 = __esm({
     );
     systemConfig = pgTable("system_config", {
       id: serial("id").primaryKey(),
-      chave: varchar("chave", { length: 100 }).notNull().unique(),
-      valor: text("valor").notNull(),
-      updatedAt: timestamp("updatedAt").defaultNow().notNull()
+      chave: varchar("config_key", { length: 100 }).notNull().unique(),
+      valor: text("config_value").notNull(),
+      updatedAt: bigint4("updated_at", { mode: "number" })
     });
   }
 });
@@ -41256,7 +41257,7 @@ async function getUserPermissions() {
 async function saveUserPermissions(permissions) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");
-  await db.insert(systemConfig).values({ chave: "user_permissions", valor: JSON.stringify(permissions) }).onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: /* @__PURE__ */ new Date() } });
+  await db.insert(systemConfig).values({ chave: "user_permissions", valor: JSON.stringify(permissions), updatedAt: Date.now() }).onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: Date.now() } });
 }
 async function listUsers() {
   const db = await getDb();
@@ -41352,6 +41353,7 @@ async function listTransacoes(params) {
   if (params.tipo) conditions.push(eq(transacoes.tipo, params.tipo));
   if (params.status) conditions.push(eq(transacoes.status, params.status));
   if (params.busca) conditions.push(ilike(transacoes.descricao, `%${params.busca}%`));
+  if (params.emitirNF !== void 0) conditions.push(eq(transacoes.emitirNF, params.emitirNF));
   const where = conditions.length > 0 ? and(...conditions) : void 0;
   const limit = params.limit ?? 100;
   const offset = params.offset ?? 0;
@@ -41371,6 +41373,7 @@ async function listTransacoes(params) {
       formaPagamento: transacoes.formaPagamento,
       observacao: transacoes.observacao,
       recorrente: transacoes.recorrente,
+      emitirNF: transacoes.emitirNF,
       recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
       totalParcelas: transacoes.totalParcelas,
       parcelaAtual: transacoes.parcelaAtual,
@@ -41466,6 +41469,7 @@ async function createTransacaoComRecorrencia(data) {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: grupoId,
       totalParcelas: data.totalParcelas ?? null,
       parcelaAtual: i + 1
@@ -41516,6 +41520,7 @@ async function updateTransacaoComRecorrencia(id, data) {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: false,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: null,
       totalParcelas: null,
       parcelaAtual: null,
@@ -41538,6 +41543,7 @@ async function updateTransacaoComRecorrencia(id, data) {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       updatedAt: /* @__PURE__ */ new Date()
     }).where(eq(transacoes.id, id)).returning();
     return { updated: result[0], created: [], grupoId: registroAtual.recorrenciaGrupoId };
@@ -41553,6 +41559,7 @@ async function updateTransacaoComRecorrencia(id, data) {
         categoriaId: data.categoriaId ?? null,
         formaPagamento: data.formaPagamento ?? null,
         observacao: data.observacao ?? null,
+        emitirNF: data.emitirNF ?? false,
         totalParcelas: data.totalParcelas ?? null,
         updatedAt: /* @__PURE__ */ new Date()
       }).where(eq(transacoes.id, t2.id));
@@ -41586,6 +41593,7 @@ async function updateTransacaoComRecorrencia(id, data) {
     formaPagamento: data.formaPagamento ?? null,
     observacao: data.observacao ?? null,
     recorrente: true,
+    emitirNF: data.emitirNF ?? false,
     recorrenciaGrupoId: grupoId,
     totalParcelas: data.totalParcelas ?? null,
     parcelaAtual: 1,
@@ -41619,6 +41627,7 @@ async function updateTransacaoComRecorrencia(id, data) {
       formaPagamento: data.formaPagamento ?? null,
       observacao: data.observacao ?? null,
       recorrente: true,
+      emitirNF: data.emitirNF ?? false,
       recorrenciaGrupoId: grupoId,
       totalParcelas: data.totalParcelas ?? null,
       parcelaAtual: i + 1
@@ -44565,7 +44574,7 @@ var ENV = {
   databaseUrl: process.env.DATABASE_URL ?? "",
   oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
   ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
+  isProduction: true,
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
 };
@@ -57380,7 +57389,7 @@ var appRouter = router({
     })
   }),
   transacoes: router({
-    list: publicProcedure.input(zod_default.object({ mes: zod_default.number().min(1).max(12).optional(), ano: zod_default.number().optional(), tipo: zod_default.enum(["despesa", "receita"]).optional(), status: zod_default.enum(["pendente", "pago", "cancelado"]).optional(), busca: zod_default.string().optional(), limit: zod_default.number().optional(), offset: zod_default.number().optional() }).optional()).query(async ({ input }) => listTransacoes(input ?? {})),
+    list: publicProcedure.input(zod_default.object({ mes: zod_default.number().min(1).max(12).optional(), ano: zod_default.number().optional(), tipo: zod_default.enum(["despesa", "receita"]).optional(), status: zod_default.enum(["pendente", "pago", "cancelado"]).optional(), busca: zod_default.string().optional(), limit: zod_default.number().optional(), offset: zod_default.number().optional(), emitirNF: zod_default.boolean().optional() }).optional()).query(async ({ input }) => listTransacoes(input ?? {})),
     getById: publicProcedure.input(zod_default.object({ id: zod_default.number() })).query(async ({ input }) => getTransacaoById(input.id)),
     // Criar lançamento: requer permissão create_lancamentos
     create: permissionProcedure("create_lancamentos").input(zod_default.object({
@@ -57397,7 +57406,8 @@ var appRouter = router({
       formaPagamento: zod_default.string().optional(),
       observacao: zod_default.string().optional(),
       recorrente: zod_default.boolean().optional(),
-      totalParcelas: zod_default.number().min(1).max(360).nullable().optional()
+      totalParcelas: zod_default.number().min(1).max(360).nullable().optional(),
+      emitirNF: zod_default.boolean().optional()
     })).mutation(async ({ input }) => {
       return createTransacaoComRecorrencia({
         descricao: input.descricao,
@@ -57413,7 +57423,8 @@ var appRouter = router({
         formaPagamento: input.formaPagamento,
         observacao: input.observacao,
         recorrente: input.recorrente ?? false,
-        totalParcelas: input.recorrente ? input.totalParcelas ?? null : void 0
+        totalParcelas: input.recorrente ? input.totalParcelas ?? null : void 0,
+        emitirNF: input.emitirNF ?? false
       });
     }),
     // Editar lançamento: requer permissão edit_lancamentos
@@ -57431,7 +57442,8 @@ var appRouter = router({
       categoriaId: zod_default.number().nullable().optional(),
       formaPagamento: zod_default.string().optional(),
       observacao: zod_default.string().optional(),
-      recorrente: zod_default.boolean().optional()
+      recorrente: zod_default.boolean().optional(),
+      emitirNF: zod_default.boolean().optional()
     })).mutation(async ({ input }) => {
       const { id, valor, ...rest } = input;
       return updateTransacao(id, { ...rest, ...valor !== void 0 ? { valor: String(valor) } : {} });
@@ -57453,7 +57465,8 @@ var appRouter = router({
       observacao: zod_default.string().optional(),
       recorrente: zod_default.boolean(),
       totalParcelas: zod_default.number().min(1).max(360).nullable().optional(),
-      escopo: zod_default.enum(["apenas_este", "este_e_futuros", "todos"]).optional()
+      escopo: zod_default.enum(["apenas_este", "este_e_futuros", "todos"]).optional(),
+      emitirNF: zod_default.boolean().optional()
     })).mutation(async ({ input }) => {
       const { id, valor, ...rest } = input;
       return updateTransacaoComRecorrencia(id, { ...rest, valor: String(valor) });

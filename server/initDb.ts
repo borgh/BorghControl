@@ -182,6 +182,20 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS "idx_status" ON "transacoes" ("status");
       `);
 
+      // Tabela de anexos de transações
+      await client.query(`
+        CREATE TABLE IF NOT EXISTS transacao_anexos (
+          id serial PRIMARY KEY,
+          transacao_id integer NOT NULL,
+          nome_arquivo varchar(255) NOT NULL,
+          mime_type varchar(100) NOT NULL,
+          tamanho integer NOT NULL,
+          dados bytea NOT NULL,
+          created_at timestamp DEFAULT now() NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_anexos_transacao ON transacao_anexos (transacao_id);
+      `);
+
       // Seed categorias
       const catCount = await client.query('SELECT COUNT(*) FROM "categorias"');
       if (parseInt(catCount.rows[0].count) === 0) {

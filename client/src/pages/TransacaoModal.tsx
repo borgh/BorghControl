@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { trpc } from "@/lib/trpc";
+import { AnexosUpload, uploadPendingAnexos } from "@/components/AnexosUpload";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +135,10 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
   // Estado do diálogo de escopo
   const [escopoDialogOpen, setEscopoDialogOpen] = useState(false);
   const [pendingData, setPendingData] = useState<any>(null);
+  // Arquivos pendentes para upload (novo lançamento)
+  const [pendingAnexos, setPendingAnexos] = useState<File[]>([]);
+  // ID da transação criada (para exibir o componente de anexos após criar)
+  const [createdId, setCreatedId] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -162,6 +167,8 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       setTipoRecorrencia("unico");
       setEmitirNF(false);
       setPrioridade(false);
+      setPendingAnexos([]);
+      setCreatedId(null);
       setForm({
         descricao: "",
         valor: "",
@@ -181,13 +188,27 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
   };
 
   const createMut = trpc.transacoes.create.useMutation({
-    onSuccess: (res) => {
+    onSuccess: async (res) => {
       const count = (res as any)?.created?.length ?? 1;
-      if (count > 1) {
-        toast.success(`${count} lançamentos criados com sucesso!`);
+      // Fazer upload dos arquivos pendentes se houver
+      const firstId = (res as any)?.created?.[0]?.id ?? (res as any)?.id;
+      if (pendingAnexos.length > 0 && firstId) {
+        try {
+          await uploadPendingAnexos(firstId, pendingAnexos);
+          toast.success(count > 1
+            ? `${count} lançamentos criados com ${pendingAnexos.length} anexo(s)!`
+            : `Lançamento criado com ${pendingAnexos.length} anexo(s)!`);
+        } catch (err: any) {
+          toast.warning(`Lançamento criado, mas erro ao anexar: ${err.message}`);
+        }
       } else {
-        toast.success("Lançamento criado!");
+        if (count > 1) {
+          toast.success(`${count} lançamentos criados com sucesso!`);
+        } else {
+          toast.success("Lançamento criado!");
+        }
       }
+      setPendingAnexos([]);
       invalidate();
       onSuccess();
       onClose();
@@ -549,7 +570,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
               </div>
             )}
 
-            {/* Observação */}
+                        {/* Observação */}
             <div className="space-y-1.5">
               <Label>Observação</Label>
               <Textarea
@@ -559,7 +580,16 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
                 rows={2}
               />
             </div>
-
+            {/* Anexos - apenas para despesas */}
+            {tipo === "despesa" && (
+              <div className="space-y-1.5 border-t border-border pt-4">
+                <AnexosUpload
+                  transacaoId={editItem?.id ?? null}
+                  pendingFiles={pendingAnexos}
+                  onPendingFiles={setPendingAnexos}
+                />
+              </div>
+            )}
             {/* Botões */}
             <div className="flex gap-3 pt-1">
               <Button type="button" variant="outline" onClick={onClose} className="flex-1">

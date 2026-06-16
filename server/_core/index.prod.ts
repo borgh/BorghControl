@@ -7,6 +7,7 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { initDatabase } from "../initDb";
+import { registerAnexosRoutes } from "../anexos";
 import path from "path";
 import fs from "fs";
 
@@ -62,6 +63,7 @@ async function startServer() {
   await initDatabase();
   
   registerStorageProxy(app);
+  registerAnexosRoutes(app);
   
   // tRPC API
   app.use(

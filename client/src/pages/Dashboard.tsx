@@ -14,9 +14,9 @@ const MESES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov"
 const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
-function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
-  return (
-    <Card className="relative overflow-hidden">
+function StatCard({ title, value, icon: Icon, color, sub, trend, href }: any) {
+  const inner = (
+    <Card className={`relative overflow-hidden${href ? ' cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -37,6 +37,8 @@ function StatCard({ title, value, icon: Icon, color, sub, trend }: any) {
       </CardContent>
     </Card>
   );
+  if (href) return <Link href={href}>{inner}</Link>;
+  return inner;
 }
 
 function VencimentoLista({
@@ -170,8 +172,8 @@ export default function Dashboard() {
 
       {/* Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-        <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" />
-        <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" />
+        <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
+        <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
         <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
         <StatCard title="Pendentes" value={fmt(rm?.totalPendente ?? 0)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} />
       </div>

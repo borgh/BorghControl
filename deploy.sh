@@ -25,8 +25,15 @@ fi
 
 cd "$REPO_DIR"
 
-echo ">>> Instalando dependências (incluindo devDependencies)..."
-npm install --include=dev --legacy-peer-deps 2>&1 | tail -5
+echo ">>> Verificando/instalando pnpm..."
+if ! command -v pnpm &> /dev/null; then
+  echo "pnpm nao encontrado, instalando..."
+  npm install -g pnpm
+fi
+pnpm --version
+
+echo ">>> Instalando dependencias (incluindo devDependencies)..."
+pnpm install --no-frozen-lockfile 2>&1 | tail -5
 
 echo ">>> Verificando ferramentas de build..."
 ls node_modules/.bin/vite node_modules/.bin/esbuild 2>/dev/null || echo "AVISO: ferramentas nao encontradas em node_modules/.bin/"

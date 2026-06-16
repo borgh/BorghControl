@@ -53,7 +53,7 @@ echo ">>> Buildando frontend (Vite)..."
 NODE_ENV=production $VITE_BIN build --outDir "$PROJECT_DIR/dist/public" 2>&1 | tail -8
 
 echo ">>> Buildando servidor (esbuild)..."
-$ESBUILD_BIN server/_core/index.ts \
+$ESBUILD_BIN server/_core/index.prod.ts \
   --platform=node \
   --bundle \
   --format=cjs \
@@ -64,11 +64,6 @@ $ESBUILD_BIN server/_core/index.ts \
   --external:oracledb \
   --external:tedious \
   --external:sqlite3 \
-  --external:@vite/client \
-  --external:vite \
-  --external:lightningcss \
-  --external:@tailwindcss/oxide \
-  --external:@babel/preset-typescript \
   --log-level=warning 2>&1 | tail -5
 
 echo ">>> Verificando bundle..."

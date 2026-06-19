@@ -149,17 +149,17 @@ export default function Despesas() {
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
   const searchStr = useSearch();
-  const initialStatus = useMemo(() => {
-    const params = new URLSearchParams(searchStr);
+  // Lê o status inicial da URL (funciona tanto na montagem quanto na navegação)
+  const [status, setStatus] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
     return params.get("status") ?? "todos";
-  }, []);
-  const [status, setStatus] = useState(initialStatus);
+  });
 
-  // Atualiza o filtro se a URL mudar (ex: navegação do dashboard)
+  // Atualiza o filtro quando a URL mudar (ex: navegação do dashboard)
   useEffect(() => {
     const params = new URLSearchParams(searchStr);
-    const s = params.get("status");
-    if (s) setStatus(s);
+    const s = params.get("status") ?? "todos";
+    setStatus(s);
   }, [searchStr]);
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
@@ -301,14 +301,14 @@ export default function Despesas() {
             <p className="text-[10px] sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight break-all">{fmt(totalPago)}</p>
           </CardContent>
         </Card>
-        <Card className="bg-amber-50 border-amber-100 overflow-hidden">
+        <Card className="bg-amber-50 border-amber-100 overflow-hidden cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setStatus("pendente")} title="Filtrar apenas Pendentes">
           <CardContent className="p-2 sm:p-3 text-center">
             <p className="text-[9px] sm:text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
             <p className="text-[10px] sm:text-sm font-bold text-amber-700 tabular-nums leading-tight break-all">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
         {totalAtraso > 0 && (
-          <Card className="bg-red-100 border-red-300 overflow-hidden">
+          <Card className="bg-red-100 border-red-300 overflow-hidden cursor-pointer hover:bg-red-200 transition-colors" onClick={() => setStatus("em_atraso")} title="Filtrar apenas Em Atraso">
             <CardContent className="p-2 sm:p-3 text-center">
               <p className="text-[9px] sm:text-[10px] text-red-700 font-medium uppercase tracking-wide flex items-center justify-center gap-0.5">
                 <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { TransacaoModal } from "./TransacaoModal";
@@ -15,8 +15,17 @@ const MESES_FULL = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Ju
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 function StatCard({ title, value, icon: Icon, color, sub, trend, href }: any) {
+  const [, navigate] = useLocation();
+  const handleClick = () => {
+    if (!href) return;
+    // navigate do wouter suporta query strings e dispara useSearch corretamente
+    navigate(href);
+  };
   const inner = (
-    <Card className={`relative overflow-hidden${href ? ' cursor-pointer hover:shadow-md transition-shadow' : ''}`}>
+    <Card
+      className={`relative overflow-hidden${href ? ' cursor-pointer hover:shadow-md transition-shadow' : ''}`}
+      onClick={href ? handleClick : undefined}
+    >
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
@@ -37,7 +46,6 @@ function StatCard({ title, value, icon: Icon, color, sub, trend, href }: any) {
       </CardContent>
     </Card>
   );
-  if (href) return <Link href={href}>{inner}</Link>;
   return inner;
 }
 

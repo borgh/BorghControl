@@ -1,4 +1,4 @@
-import { eq, and, desc, sql, ilike } from "drizzle-orm";
+import { eq, and, or, desc, sql, ilike } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
@@ -719,13 +719,50 @@ export async function getLancamentosEmAtraso(tipo?: "despesa" | "receita") {
     .limit(20);
 }
 
+export async function getLancamentosVenceEmBreve() {
+  const db = await getDb();
+  if (!db) return [];
+  const hoje = new Date();
+  // Calcula os dias (hoje+1, hoje+2, hoje+3) como {mes, ano, dia} — exclui hoje (que já é pendente normal)
+  const diasAlvo: Array<{ mes: number; ano: number; dia: number }> = [];
+  for (let i = 1; i <= 3; i++) {
+    const d = new Date(hoje);
+    d.setDate(hoje.getDate() + i);
+    diasAlvo.push({ mes: d.getMonth() + 1, ano: d.getFullYear(), dia: d.getDate() });
+  }
+  // Usa or() do drizzle para cada combinação (ano, mes, diaVencimento)
+  const diaConditions = diasAlvo.map(({ mes, ano, dia }) =>
+    and(
+      eq(transacoes.ano, ano),
+      eq(transacoes.mes, mes),
+      eq(transacoes.diaVencimento, dia)
+    )
+  );
+  return db.select({
+    id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor,
+    tipo: transacoes.tipo, diaVencimento: transacoes.diaVencimento, vencimentoTexto: transacoes.vencimentoTexto,
+    dataVencimento: transacoes.dataVencimento,
+    mes: transacoes.mes, ano: transacoes.ano, status: transacoes.status,
+    categoriaNome: categorias.nome, categoriaCor: categorias.cor,
+  })
+    .from(transacoes)
+    .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+    .where(and(
+      eq(transacoes.status, "pendente"),
+      eq(transacoes.tipo, "despesa"),
+      or(...diaConditions)
+    ))
+    .orderBy(transacoes.ano, transacoes.mes, transacoes.diaVencimento)
+    .limit(20);
+}
+
 export async function getDashboardStats() {
   const db = await getDb();
   if (!db) return null;
   const hoje = new Date();
   const mes = hoje.getMonth() + 1;
   const ano = hoje.getFullYear();
-  const [resumo, porCategoria, anuais, vencimentosDespesas, vencimentosReceitas, atrasoDespesas, atrasoReceitas] = await Promise.all([
+  const [resumo, porCategoria, anuais, vencimentosDespesas, vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve] = await Promise.all([
     getResumoMensal(mes, ano),
     getDespesasPorCategoria(mes, ano),
     getResumoAnual(ano),
@@ -733,6 +770,7 @@ export async function getDashboardStats() {
     getProximosVencimentos(7, "receita"),
     getLancamentosEmAtraso("despesa"),
     getLancamentosEmAtraso("receita"),
+    getLancamentosVenceEmBreve(),
   ]);
   const totais = await db.select({
     tipo: transacoes.tipo, status: transacoes.status, count: sql<number>`COUNT(*)`,
@@ -743,7 +781,7 @@ export async function getDashboardStats() {
     if (t.tipo === "receita") contReceitas += Number(t.count);
     if (t.status === "pendente") contPendentes += Number(t.count);
   }
-  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
 }
 
 export async function getAnosDisponiveis() {

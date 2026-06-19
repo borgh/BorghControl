@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle } from "lucide-react";
+import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
@@ -175,14 +175,22 @@ export default function Dashboard() {
         const totalAtraso = rm?.totalAtraso ?? 0;
         const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
         const hasAtraso = totalAtraso > 0;
+        // Usa dados do backend para despesas que vencem em até 3 dias
+        const venceEmBreve = stats?.venceEmBreve ?? [];
+        const hasVenceEmBreve = venceEmBreve.length > 0;
+        const colCount = 4 + (hasAtraso ? 1 : 0) + (hasVenceEmBreve ? 1 : 0);
+        const gridClass = `grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-${colCount}`;
         return (
-          <div className={`grid gap-2 sm:gap-4 ${hasAtraso ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}`}>
+          <div className={gridClass}>
             <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
             <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
             <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
             <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
             {hasAtraso && (
               <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas?status=em_atraso" />
+            )}
+            {hasVenceEmBreve && (
+              <StatCard title="Vence em Breve" value={String(venceEmBreve.length)} icon={Clock} color="bg-orange-500" sub="próximos 3 dias" href="/despesas?status=vence_em_breve" />
             )}
           </div>
         );

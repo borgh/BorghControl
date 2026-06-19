@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle, Clock } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { AnexosBadge } from "@/components/AnexosBadge";
@@ -36,6 +36,33 @@ export function isEmAtraso(item: any): boolean {
       ? `${item.ano}-${String(item.mes).padStart(2, "0")}-${String(item.diaVencimento).padStart(2, "0")}`
       : `${item.ano}-${String(item.mes).padStart(2, "0")}-01`);
   return venc < hojeStr;
+}
+
+/**
+ * Retorna quantos dias faltam para o vencimento (0 = hoje, negativo = atrasado).
+ * Retorna null se não houver data de vencimento.
+ */
+export function diasParaVencer(item: any): number | null {
+  const venc = item.dataVencimento
+    ?? (item.diaVencimento
+      ? `${item.ano}-${String(item.mes).padStart(2, "0")}-${String(item.diaVencimento).padStart(2, "0")}`
+      : null);
+  if (!venc) return null;
+  const hoje = new Date();
+  const hojeMs = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const [y, m, d] = venc.split("-").map(Number);
+  const vencMs = Date.UTC(y, m - 1, d);
+  return Math.round((vencMs - hojeMs) / 86400000);
+}
+
+/**
+ * Retorna true se a despesa está pendente (não em atraso) e vence em até 3 dias.
+ */
+export function isVenceEmBreve(item: any): boolean {
+  if (item.status !== "pendente") return false;
+  if (isEmAtraso(item)) return false;
+  const dias = diasParaVencer(item);
+  return dias !== null && dias >= 0 && dias <= 3;
 }
 
 function sortItems(items: any[], ordem: OrdemKey): any[] {
@@ -97,6 +124,15 @@ export function StatusBadge({ item }: { item: any }) {
       return (
         <Badge className="text-[10px] px-1.5 py-0 gap-0.5 bg-red-100 text-red-800 border border-red-400 hover:bg-red-100 shrink-0">
           <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso
+        </Badge>
+      );
+    }
+    const dias = diasParaVencer(item);
+    if (dias !== null && dias >= 0 && dias <= 3) {
+      const label = dias === 0 ? "Vence hoje" : dias === 1 ? "Vence amanhã" : `Vence em ${dias}d`;
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 gap-0.5 bg-orange-100 text-orange-800 border border-orange-400 hover:bg-orange-100 shrink-0">
+          <Clock className="h-2.5 w-2.5" /> {label}
         </Badge>
       );
     }
@@ -175,9 +211,11 @@ export default function Despesas() {
   const { can } = usePermissions();
   const rawItems = data?.items ?? [];
 
-  // Aplica filtro de "em atraso" no frontend
+  // Aplica filtro de "em atraso" ou "pendente puro" no frontend
   const filteredItems = useMemo(() => {
     if (status === "em_atraso") return rawItems.filter((i: any) => isEmAtraso(i));
+    if (status === "pendente") return rawItems.filter((i: any) => i.status === "pendente" && !isEmAtraso(i));
+    if (status === "vence_em_breve") return rawItems.filter((i: any) => isVenceEmBreve(i));
     return rawItems;
   }, [rawItems, status]);
 
@@ -187,6 +225,8 @@ export default function Despesas() {
   const totalPago = rawItems.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalPendente = rawItems.filter((i: any) => i.status === "pendente" && !isEmAtraso(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalAtraso = rawItems.filter((i: any) => isEmAtraso(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const itensVenceEmBreve = rawItems.filter((i: any) => isVenceEmBreve(i));
+  const totalVenceEmBreve = itensVenceEmBreve.reduce((s: number, i: any) => s + Number(i.valor), 0);
 
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
@@ -224,6 +264,29 @@ export default function Despesas() {
         )}
       </div>
 
+      {/* Banner de alerta — vence em breve */}
+      {itensVenceEmBreve.length > 0 && (
+        <div
+          className="flex items-start gap-3 rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 cursor-pointer hover:bg-orange-100 transition-colors"
+          onClick={() => setStatus("vence_em_breve")}
+          title="Clique para filtrar despesas que vencem em breve"
+        >
+          <Clock className="h-4 w-4 text-orange-600 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-orange-800">
+              {itensVenceEmBreve.length === 1
+                ? "1 despesa vence nos próximos 3 dias"
+                : `${itensVenceEmBreve.length} despesas vencem nos próximos 3 dias`}
+            </p>
+            <p className="text-xs text-orange-700 mt-0.5">
+              Total: {fmt(totalVenceEmBreve)} — clique para ver apenas essas despesas
+            </p>
+          </div>
+          <Badge className="text-[10px] px-2 py-0.5 bg-orange-200 text-orange-800 border border-orange-400 hover:bg-orange-200 shrink-0">
+            Ver
+          </Badge>
+        </div>
+      )}
       {/* Resumo — 4 cards quando há atraso, 3 quando não */}
       <div className={`grid gap-2 ${totalAtraso > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
         <Card className="bg-red-50 border-red-100 overflow-hidden">
@@ -286,6 +349,7 @@ export default function Despesas() {
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="vence_em_breve">🕐 Vence em 3 dias</SelectItem>
                   <SelectItem value="em_atraso">⚠️ Em Atraso</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>

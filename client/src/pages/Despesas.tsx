@@ -177,8 +177,8 @@ export default function Despesas() {
     return Array.from(set).sort((a, b) => b - a);
   }, [anosData]);
 
-  // Para o filtro "em_atraso", buscamos todos os pendentes e filtramos no frontend
-  const queryStatus = status === "em_atraso" ? "pendente" : (status !== "todos" ? status as any : undefined);
+  // Para "em_atraso" e "vence_em_breve", buscamos todos os pendentes e filtramos no frontend
+  const queryStatus = (status === "em_atraso" || status === "vence_em_breve") ? "pendente" : (status !== "todos" ? status as any : undefined);
 
   const { data, isLoading } = trpc.transacoes.list.useQuery({
     tipo: "despesa",

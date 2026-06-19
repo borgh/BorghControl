@@ -180,9 +180,9 @@ export default function Dashboard() {
             <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
             <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
             <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
-            <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} />
+            <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
             {hasAtraso && (
-              <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas" />
+              <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas?status=em_atraso" />
             )}
           </div>
         );

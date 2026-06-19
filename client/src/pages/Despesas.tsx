@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -111,7 +112,19 @@ export default function Despesas() {
   const hoje = new Date();
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
-  const [status, setStatus] = useState("todos");
+  const searchStr = useSearch();
+  const initialStatus = useMemo(() => {
+    const params = new URLSearchParams(searchStr);
+    return params.get("status") ?? "todos";
+  }, []);
+  const [status, setStatus] = useState(initialStatus);
+
+  // Atualiza o filtro se a URL mudar (ex: navegação do dashboard)
+  useEffect(() => {
+    const params = new URLSearchParams(searchStr);
+    const s = params.get("status");
+    if (s) setStatus(s);
+  }, [searchStr]);
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
   const [filtroPrioridade, setFiltroPrioridade] = useState("todos");

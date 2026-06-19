@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Pencil, Check, RotateCcw, CalendarDays, Tag, CreditCard,
-  FileText, Repeat, Infinity, TrendingDown, TrendingUp, ExternalLink, Flame,
+  FileText, Repeat, Infinity, TrendingDown, TrendingUp, ExternalLink, Flame, AlertTriangle,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { usePermissions } from "@/hooks/usePermissions";
 import { Link } from "wouter";
 import { AnexosDetalheSection } from "@/components/AnexosBadge";
+import { isEmAtraso } from "./Despesas";
 
 const MESES = ["", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
@@ -25,8 +26,15 @@ interface TransacaoDetalheModalProps {
   editAsLink?: boolean;
 }
 
-function StatusBadgeLg({ status, tipo }: { status: string; tipo: string }) {
+function StatusBadgeLg({ status, tipo, item }: { status: string; tipo: string; item?: any }) {
   if (status === "pendente") {
+    if (item && isEmAtraso(item)) {
+      return (
+        <Badge className="text-sm px-3 py-1 gap-1 bg-red-100 text-red-800 border border-red-400 hover:bg-red-100">
+          <AlertTriangle className="h-3.5 w-3.5" /> Em Atraso
+        </Badge>
+      );
+    }
     return (
       <Badge className="text-sm px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100">
         Pendente
@@ -112,7 +120,7 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, 
                 {fmt(Number(item.valor))}
               </p>
             </div>
-            <StatusBadgeLg status={item.status} tipo={item.tipo} />
+            <StatusBadgeLg status={item.status} tipo={item.tipo} item={item} />
           </div>
 
           {/* Detalhes em grade */}

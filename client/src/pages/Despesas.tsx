@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { AnexosBadge } from "@/components/AnexosBadge";
@@ -20,6 +20,22 @@ const MESES = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junh
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 type OrdemKey = "vencimento_asc" | "vencimento_desc" | "valor_asc" | "valor_desc" | "descricao_asc" | "descricao_desc" | "status";
+
+/**
+ * Retorna true se a despesa está em atraso:
+ * status=pendente E data de vencimento anterior a hoje.
+ * Usa dataVencimento (YYYY-MM-DD) se disponível, senão reconstrói a partir de ano/mes/diaVencimento.
+ */
+export function isEmAtraso(item: any): boolean {
+  if (item.status !== "pendente") return false;
+  const hoje = new Date();
+  const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+  const venc = item.dataVencimento
+    ?? (item.diaVencimento
+      ? `${item.ano}-${String(item.mes).padStart(2, "0")}-${String(item.diaVencimento).padStart(2, "0")}`
+      : `${item.ano}-${String(item.mes).padStart(2, "0")}-01`);
+  return venc < hojeStr;
+}
 
 function sortItems(items: any[], ordem: OrdemKey): any[] {
   return [...items].sort((a, b) => {
@@ -43,8 +59,14 @@ function sortItems(items: any[], ordem: OrdemKey): any[] {
       case "descricao_desc":
         return (b.descricao ?? "").localeCompare(a.descricao ?? "", "pt-BR");
       case "status": {
-        const order: Record<string, number> = { pendente: 0, pago: 1, cancelado: 2 };
-        return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+        // Em atraso primeiro, depois pendente, pago, cancelado
+        const order = (i: any) => {
+          if (i.status === "cancelado") return 3;
+          if (i.status === "pago") return 2;
+          if (isEmAtraso(i)) return 0;
+          return 1;
+        };
+        return order(a) - order(b);
       }
       default:
         return 0;
@@ -68,8 +90,15 @@ function RecorrenciaBadge({ item }: { item: any }) {
   );
 }
 
-function StatusBadge({ item }: { item: any }) {
+export function StatusBadge({ item }: { item: any }) {
   if (item.status === "pendente") {
+    if (isEmAtraso(item)) {
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 gap-0.5 bg-red-100 text-red-800 border border-red-400 hover:bg-red-100 shrink-0">
+          <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso
+        </Badge>
+      );
+    }
     return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100 shrink-0">Pendente</Badge>;
   }
   if (item.status === "cancelado") {
@@ -99,11 +128,14 @@ export default function Despesas() {
     return Array.from(set).sort((a, b) => b - a);
   }, [anosData]);
 
+  // Para o filtro "em_atraso", buscamos todos os pendentes e filtramos no frontend
+  const queryStatus = status === "em_atraso" ? "pendente" : (status !== "todos" ? status as any : undefined);
+
   const { data, isLoading } = trpc.transacoes.list.useQuery({
     tipo: "despesa",
     mes: mes !== "0" ? Number(mes) : undefined,
     ano: ano !== "0" ? Number(ano) : undefined,
-    status: status !== "todos" ? status as any : undefined,
+    status: queryStatus,
     busca: busca || undefined,
     prioridade: filtroPrioridade === "sim" ? true : filtroPrioridade === "nao" ? false : undefined,
   });
@@ -129,10 +161,19 @@ export default function Despesas() {
 
   const { can } = usePermissions();
   const rawItems = data?.items ?? [];
-  const items = useMemo(() => sortItems(rawItems, ordem), [rawItems, ordem]);
+
+  // Aplica filtro de "em atraso" no frontend
+  const filteredItems = useMemo(() => {
+    if (status === "em_atraso") return rawItems.filter((i: any) => isEmAtraso(i));
+    return rawItems;
+  }, [rawItems, status]);
+
+  const items = useMemo(() => sortItems(filteredItems, ordem), [filteredItems, ordem]);
+
   const total = rawItems.reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalPago = rawItems.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
-  const totalPendente = rawItems.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalPendente = rawItems.filter((i: any) => i.status === "pendente" && !isEmAtraso(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalAtraso = rawItems.filter((i: any) => isEmAtraso(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
 
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
@@ -170,8 +211,8 @@ export default function Despesas() {
         )}
       </div>
 
-      {/* Resumo */}
-      <div className="grid grid-cols-3 gap-2">
+      {/* Resumo — 4 cards quando há atraso, 3 quando não */}
+      <div className={`grid gap-2 ${totalAtraso > 0 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
         <Card className="bg-red-50 border-red-100 overflow-hidden">
           <CardContent className="p-2 sm:p-3 text-center">
             <p className="text-[9px] sm:text-[10px] text-red-600 font-medium uppercase tracking-wide">Total</p>
@@ -190,6 +231,16 @@ export default function Despesas() {
             <p className="text-[10px] sm:text-sm font-bold text-amber-700 tabular-nums leading-tight break-all">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
+        {totalAtraso > 0 && (
+          <Card className="bg-red-100 border-red-300 overflow-hidden">
+            <CardContent className="p-2 sm:p-3 text-center">
+              <p className="text-[9px] sm:text-[10px] text-red-700 font-medium uppercase tracking-wide flex items-center justify-center gap-0.5">
+                <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso
+              </p>
+              <p className="text-[10px] sm:text-sm font-bold text-red-800 tabular-nums leading-tight break-all">{fmt(totalAtraso)}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Filtros */}
@@ -218,10 +269,11 @@ export default function Despesas() {
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-9 text-xs sm:w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="em_atraso">⚠️ Em Atraso</SelectItem>
                   <SelectItem value="pago">Pago</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
@@ -245,7 +297,7 @@ export default function Despesas() {
                   <SelectItem value="valor_desc">Valor ↓</SelectItem>
                   <SelectItem value="descricao_asc">Descrição A→Z</SelectItem>
                   <SelectItem value="descricao_desc">Descrição Z→A</SelectItem>
-                  <SelectItem value="status">Status</SelectItem>
+                  <SelectItem value="status">Status (atraso primeiro)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -269,6 +321,7 @@ export default function Despesas() {
               {items.map((item: any) => {
                 const isPendente = item.status === "pendente";
                 const isCancelado = item.status === "cancelado";
+                const emAtraso = isEmAtraso(item);
 
                 const dataVenc = item.dataVencimento
                   ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
@@ -280,16 +333,17 @@ export default function Despesas() {
                   <div
                     key={item.id}
                     onClick={(e) => {
-                      // Não abre detalhe se clicou em botão de ação
                       if ((e.target as HTMLElement).closest('button')) return;
                       setDetalheItem(item);
                     }}
                     className={`px-3 py-3 transition-colors group cursor-pointer ${
-                      isPendente
-                        ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
-                        : isCancelado
-                          ? "bg-muted/20 hover:bg-muted/30 opacity-60"
-                          : "hover:bg-muted/30"
+                      emAtraso
+                        ? "bg-red-50/80 hover:bg-red-50 border-l-2 border-l-red-500"
+                        : isPendente
+                          ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
+                          : isCancelado
+                            ? "bg-muted/20 hover:bg-muted/30 opacity-60"
+                            : "hover:bg-muted/30"
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -297,7 +351,7 @@ export default function Despesas() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <p className={`text-sm font-semibold leading-tight truncate ${isPendente ? "text-amber-900" : ""}`}>
+                            <p className={`text-sm font-semibold leading-tight truncate ${emAtraso ? "text-red-900" : isPendente ? "text-amber-900" : ""}`}>
                               {item.descricao}
                             </p>
                             <RecorrenciaBadge item={item} />
@@ -308,13 +362,13 @@ export default function Despesas() {
                             )}
                             <AnexosBadge transacaoId={item.id} descricao={item.descricao} />
                           </div>
-                          <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-red-600"}`}>
+                          <span className={`text-sm font-bold tabular-nums shrink-0 ${emAtraso ? "text-red-700" : isPendente ? "text-amber-700" : "text-red-600"}`}>
                             {fmt(Number(item.valor))}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between gap-2 mt-1">
-                          <p className={`text-[11px] leading-tight truncate min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                          <p className={`text-[11px] leading-tight truncate min-w-0 ${emAtraso ? "text-red-700" : isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
                             {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
                           </p>
 

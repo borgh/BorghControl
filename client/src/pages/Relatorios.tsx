@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { BarChart3, TrendingDown, TrendingUp, DollarSign } from "lucide-react";
+import { BarChart3, TrendingDown, TrendingUp, DollarSign, AlertTriangle } from "lucide-react";
 
 const MESES = ["","Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
 const MESES_ABREV = ["","Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
@@ -56,28 +56,35 @@ export default function Relatorios() {
       </div>
 
       {/* Resumo mensal */}
-      {loadResumo ? <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}</div> : (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: "Receitas", value: resumo?.totalReceitas ?? 0, icon: TrendingUp, color: "bg-emerald-100 text-emerald-600", val: "text-emerald-700" },
-            { label: "Despesas", value: resumo?.totalDespesas ?? 0, icon: TrendingDown, color: "bg-red-100 text-red-600", val: "text-red-700" },
-            { label: "Saldo", value: resumo?.saldo ?? 0, icon: DollarSign, color: "bg-primary/10 text-primary", val: (resumo?.saldo ?? 0) >= 0 ? "text-primary" : "text-red-700" },
-            { label: "Pendente", value: resumo?.totalPendente ?? 0, icon: BarChart3, color: "bg-amber-100 text-amber-600", val: "text-amber-700" },
-          ].map(({ label, value, icon: Icon, color, val }) => (
-            <Card key={label}>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${color}`}><Icon className="h-4 w-4" /></div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">{label}</p>
-                    <p className={`text-base font-bold ${val}`}>{fmt(value)}</p>
+      {loadResumo ? <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-24" />)}</div> : (() => {
+        const totalAtraso = resumo?.totalAtraso ?? 0;
+        const totalPendenteReal = (resumo?.totalPendente ?? 0) - totalAtraso;
+        const cards = [
+          { label: "Receitas", value: resumo?.totalReceitas ?? 0, icon: TrendingUp, color: "bg-emerald-100 text-emerald-600", val: "text-emerald-700" },
+          { label: "Despesas", value: resumo?.totalDespesas ?? 0, icon: TrendingDown, color: "bg-red-100 text-red-600", val: "text-red-700" },
+          { label: "Saldo", value: resumo?.saldo ?? 0, icon: DollarSign, color: "bg-primary/10 text-primary", val: (resumo?.saldo ?? 0) >= 0 ? "text-primary" : "text-red-700" },
+          { label: "Pendente", value: totalPendenteReal, icon: BarChart3, color: "bg-amber-100 text-amber-600", val: "text-amber-700" },
+          ...(totalAtraso > 0 ? [{ label: "Em Atraso", value: totalAtraso, icon: AlertTriangle, color: "bg-red-100 text-red-700", val: "text-red-800" }] : []),
+        ];
+        const cols = cards.length === 5 ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4";
+        return (
+          <div className={`grid ${cols} gap-4`}>
+            {cards.map(({ label, value, icon: Icon, color, val }) => (
+              <Card key={label} className={label === "Em Atraso" ? "border-red-300" : ""}>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${color}`}><Icon className="h-4 w-4" /></div>
+                    <div>
+                      <p className="text-xs text-muted-foreground font-medium">{label}</p>
+                      <p className={`text-base font-bold ${val}`}>{fmt(value)}</p>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Gráfico anual */}
       <Card>

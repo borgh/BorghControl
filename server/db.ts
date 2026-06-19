@@ -608,7 +608,26 @@ export async function getResumoMensal(mes: number, ano: number) {
     if (row.status === "pago") totalPago += v;
     if (row.status === "pendente") totalPendente += v;
   }
-  return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, saldo: totalReceitas - totalDespesas };
+  // Calcula total em atraso: despesas pendentes com vencimento anterior a hoje
+  const hoje = new Date();
+  const diaAtual = hoje.getDate();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+  const atrasoResult = await db.select({
+    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(and(
+    eq(transacoes.mes, mes),
+    eq(transacoes.ano, ano),
+    eq(transacoes.tipo, "despesa"),
+    eq(transacoes.status, "pendente"),
+    sql`(
+      (${transacoes.ano} < ${anoAtual})
+      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
+      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
+    )`,
+  ));
+  const totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
 }
 
 export async function getResumoAnual(ano: number) {

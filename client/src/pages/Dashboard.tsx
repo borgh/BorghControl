@@ -171,12 +171,22 @@ export default function Dashboard() {
       </div>
 
       {/* Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
-        <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
-        <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
-        <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
-        <StatCard title="Pendentes" value={fmt(rm?.totalPendente ?? 0)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} />
-      </div>
+      {(() => {
+        const totalAtraso = rm?.totalAtraso ?? 0;
+        const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
+        const hasAtraso = totalAtraso > 0;
+        return (
+          <div className={`grid gap-2 sm:gap-4 ${hasAtraso ? "grid-cols-2 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}`}>
+            <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
+            <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
+            <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
+            <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} />
+            {hasAtraso && (
+              <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas" />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">

@@ -756,15 +756,68 @@ export async function getLancamentosVenceEmBreve() {
     .limit(20);
 }
 
-export async function getDashboardStats() {
+export async function getResumoAnualTotal(ano: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select({
+    tipo: transacoes.tipo, status: transacoes.status,
+    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(eq(transacoes.ano, ano)).groupBy(transacoes.tipo, transacoes.status);
+  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0;
+  for (const row of result) {
+    const v = Number(row.totalValor);
+    if (row.tipo === "receita") totalReceitas += v;
+    if (row.tipo === "despesa") totalDespesas += v;
+    if (row.status === "pago") totalPago += v;
+    if (row.status === "pendente") totalPendente += v;
+  }
+  const hoje = new Date();
+  const diaAtual = hoje.getDate();
+  const mesAtual = hoje.getMonth() + 1;
+  const anoAtual = hoje.getFullYear();
+  const atrasoResult = await db.select({
+    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(and(
+    eq(transacoes.ano, ano),
+    eq(transacoes.tipo, "despesa"),
+    eq(transacoes.status, "pendente"),
+    sql`(
+      (${transacoes.ano} < ${anoAtual})
+      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
+      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
+    )`,
+  ));
+  const totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  return { mes: 0, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
+}
+
+export async function getDespesasPorCategoriaAno(ano: number) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select({
+    categoriaId: transacoes.categoriaId, categoriaNome: categorias.nome, categoriaCor: categorias.cor,
+    total: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  })
+    .from(transacoes)
+    .leftJoin(categorias, eq(transacoes.categoriaId, categorias.id))
+    .where(and(eq(transacoes.ano, ano), eq(transacoes.tipo, "despesa")))
+    .groupBy(transacoes.categoriaId, categorias.nome, categorias.cor)
+    .orderBy(sql`SUM(CAST(${transacoes.valor} AS NUMERIC)) DESC`);
+}
+
+export async function getDashboardStats(mesParam?: number, anoParam?: number) {
   const db = await getDb();
   if (!db) return null;
   const hoje = new Date();
-  const mes = hoje.getMonth() + 1;
-  const ano = hoje.getFullYear();
+  const anoAtual = hoje.getFullYear();
+  // mes=0 significa "todos os meses do ano"
+  const mes = mesParam ?? (hoje.getMonth() + 1);
+  const ano = anoParam ?? anoAtual;
+  const todosMeses = mes === 0;
+
   const [resumo, porCategoria, anuais, vencimentosDespesas, vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve] = await Promise.all([
-    getResumoMensal(mes, ano),
-    getDespesasPorCategoria(mes, ano),
+    todosMeses ? getResumoAnualTotal(ano) : getResumoMensal(mes, ano),
+    todosMeses ? getDespesasPorCategoriaAno(ano) : getDespesasPorCategoria(mes, ano),
     getResumoAnual(ano),
     getProximosVencimentos(7, "despesa"),
     getProximosVencimentos(7, "receita"),
@@ -772,9 +825,13 @@ export async function getDashboardStats() {
     getLancamentosEmAtraso("receita"),
     getLancamentosVenceEmBreve(),
   ]);
+
+  const totaisWhere = todosMeses
+    ? eq(transacoes.ano, ano)
+    : and(eq(transacoes.mes, mes), eq(transacoes.ano, ano));
   const totais = await db.select({
     tipo: transacoes.tipo, status: transacoes.status, count: sql<number>`COUNT(*)`,
-  }).from(transacoes).where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano))).groupBy(transacoes.tipo, transacoes.status);
+  }).from(transacoes).where(totaisWhere!).groupBy(transacoes.tipo, transacoes.status);
   let contDespesas = 0, contReceitas = 0, contPendentes = 0;
   for (const t of totais) {
     if (t.tipo === "despesa") contDespesas += Number(t.count);

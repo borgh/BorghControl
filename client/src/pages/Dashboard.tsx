@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { TransacaoModal } from "./TransacaoModal";
 
@@ -120,10 +121,12 @@ function VencimentoLista({
 const COLORS = ["#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16"];
 
 export default function Dashboard() {
-  const { data: stats, isLoading, refetch } = trpc.relatorios.dashboard.useQuery();
-  const utils = trpc.useUtils();
   const hoje = new Date();
-  const mesAtual = MESES[hoje.getMonth()];
+  const [mesFiltro, setMesFiltro] = useState<number>(() => hoje.getMonth() + 1);
+  const [anoFiltro, setAnoFiltro] = useState<number>(() => hoje.getFullYear());
+
+  const { data: stats, isLoading, refetch } = trpc.relatorios.dashboard.useQuery({ mes: mesFiltro, ano: anoFiltro });
+  const utils = trpc.useUtils();
 
   const [detalheItem, setDetalheItem] = useState<any>(null);
   const [editItem, setEditItem] = useState<any>(null);
@@ -171,10 +174,35 @@ export default function Dashboard() {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold">Dashboard</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">{mesAtual} {hoje.getFullYear()} — Visão geral financeira</p>
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            {mesFiltro === 0 ? `Ano ${anoFiltro} — Todos os meses` : `${MESES_FULL[mesFiltro]} ${anoFiltro} — Visão geral financeira`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select value={String(mesFiltro)} onValueChange={(v) => setMesFiltro(Number(v))}>
+            <SelectTrigger className="w-[160px] h-8 text-sm">
+              <SelectValue placeholder="Mês" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">Todos os meses</SelectItem>
+              {MESES_FULL.slice(1).map((nome, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>{nome}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={String(anoFiltro)} onValueChange={(v) => setAnoFiltro(Number(v))}>
+            <SelectTrigger className="w-[90px] h-8 text-sm">
+              <SelectValue placeholder="Ano" />
+            </SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 5 }, (_, i) => hoje.getFullYear() - 2 + i).map((ano) => (
+                <SelectItem key={ano} value={String(ano)}>{ano}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -190,9 +218,9 @@ export default function Dashboard() {
         const gridClass = `grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-${colCount}`;
         return (
           <div className={gridClass}>
-            <StatCard title="Receitas do Mês" value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
-            <StatCard title="Despesas do Mês" value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
-            <StatCard title="Saldo do Mês" value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
+            <StatCard title={mesFiltro === 0 ? "Receitas do Ano" : "Receitas do Mês"} value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
+            <StatCard title={mesFiltro === 0 ? "Despesas do Ano" : "Despesas do Mês"} value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
+            <StatCard title={mesFiltro === 0 ? "Saldo do Ano" : "Saldo do Mês"} value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
             <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
             {hasAtraso && (
               <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas?status=em_atraso" />

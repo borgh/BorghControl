@@ -242,7 +242,9 @@ export const appRouter = router({
       }),
   }),
   relatorios: router({
-    dashboard: publicProcedure.query(async () => getDashboardStats()),
+    dashboard: publicProcedure
+      .input(z.object({ mes: z.number().min(0).max(12).optional(), ano: z.number().optional() }).optional())
+      .query(async ({ input }) => getDashboardStats(input?.mes, input?.ano)),
     resumoMensal: publicProcedure
       .input(z.object({ mes: z.number().min(1).max(12), ano: z.number() }))
       .query(async ({ input }) => getResumoMensal(input.mes, input.ano)),

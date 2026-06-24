@@ -606,27 +606,34 @@ export async function getResumoMensal(mes: number, ano: number) {
     if (row.tipo === "receita") totalReceitas += v;
     if (row.tipo === "despesa") totalDespesas += v;
     if (row.status === "pago") totalPago += v;
-    if (row.status === "pendente") totalPendente += v;
+    // totalPendente: apenas DESPESAS pendentes (contas a pagar)
+    if (row.tipo === "despesa" && row.status === "pendente") totalPendente += v;
   }
   // Calcula total em atraso: despesas pendentes com vencimento anterior a hoje
+  // Para meses futuros, totalAtraso = 0 (nada pode estar atrasado no futuro)
   const hoje = new Date();
   const diaAtual = hoje.getDate();
   const mesAtual = hoje.getMonth() + 1;
   const anoAtual = hoje.getFullYear();
-  const atrasoResult = await db.select({
-    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
-  }).from(transacoes).where(and(
-    eq(transacoes.mes, mes),
-    eq(transacoes.ano, ano),
-    eq(transacoes.tipo, "despesa"),
-    eq(transacoes.status, "pendente"),
-    sql`(
-      (${transacoes.ano} < ${anoAtual})
-      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
-      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
-    )`,
-  ));
-  const totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  // Só há atraso se o mês filtrado for anterior ao mês atual, ou igual com dia anterior
+  const mesFiltradoEhFuturo = (ano > anoAtual) || (ano === anoAtual && mes > mesAtual);
+  let totalAtraso = 0;
+  if (!mesFiltradoEhFuturo) {
+    const atrasoResult = await db.select({
+      totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+    }).from(transacoes).where(and(
+      eq(transacoes.mes, mes),
+      eq(transacoes.ano, ano),
+      eq(transacoes.tipo, "despesa"),
+      eq(transacoes.status, "pendente"),
+      sql`(
+        (${transacoes.ano} < ${anoAtual})
+        OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
+        OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
+      )`,
+    ));
+    totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  }
   return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
 }
 
@@ -769,25 +776,31 @@ export async function getResumoAnualTotal(ano: number) {
     if (row.tipo === "receita") totalReceitas += v;
     if (row.tipo === "despesa") totalDespesas += v;
     if (row.status === "pago") totalPago += v;
-    if (row.status === "pendente") totalPendente += v;
+    // totalPendente: apenas DESPESAS pendentes (contas a pagar)
+    if (row.tipo === "despesa" && row.status === "pendente") totalPendente += v;
   }
   const hoje = new Date();
   const diaAtual = hoje.getDate();
   const mesAtual = hoje.getMonth() + 1;
   const anoAtual = hoje.getFullYear();
-  const atrasoResult = await db.select({
-    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
-  }).from(transacoes).where(and(
-    eq(transacoes.ano, ano),
-    eq(transacoes.tipo, "despesa"),
-    eq(transacoes.status, "pendente"),
-    sql`(
-      (${transacoes.ano} < ${anoAtual})
-      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
-      OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
-    )`,
-  ));
-  const totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  // Só há atraso se o ano filtrado não for futuro
+  const anoEhFuturo = ano > anoAtual;
+  let totalAtraso = 0;
+  if (!anoEhFuturo) {
+    const atrasoResult = await db.select({
+      totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+    }).from(transacoes).where(and(
+      eq(transacoes.ano, ano),
+      eq(transacoes.tipo, "despesa"),
+      eq(transacoes.status, "pendente"),
+      sql`(
+        (${transacoes.ano} < ${anoAtual})
+        OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} < ${mesAtual})
+        OR (${transacoes.ano} = ${anoAtual} AND ${transacoes.mes} = ${mesAtual} AND ${transacoes.diaVencimento} < ${diaAtual})
+      )`,
+    ));
+    totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
+  }
   return { mes: 0, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
 }
 
@@ -836,7 +849,8 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
   for (const t of totais) {
     if (t.tipo === "despesa") contDespesas += Number(t.count);
     if (t.tipo === "receita") contReceitas += Number(t.count);
-    if (t.status === "pendente") contPendentes += Number(t.count);
+    // contPendentes: apenas DESPESAS pendentes (contas a pagar)
+    if (t.tipo === "despesa" && t.status === "pendente") contPendentes += Number(t.count);
   }
   return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
 }

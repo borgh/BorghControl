@@ -110,11 +110,13 @@ export async function listProjetos(busca?: string) {
   }
   const rows = await query.orderBy(desc(projetos.createdAt));
 
-  // Para cada projeto, busca sócios e total investido
+  // Para cada projeto, busca sócios e total investido (exclui imagemDados para não sobrecarregar a resposta)
   const result = await Promise.all(rows.map(async (p) => {
+    const { imagemDados: _img, ...projetoSemImagem } = p as any;
     const sociosList = await getProjetoSocios(p.id);
     const totalInvestido = await getTotalInvestidoProjeto(p.id);
-    return { ...p, socios: sociosList, totalInvestido };
+    const temImagem = _img != null && (Array.isArray(_img) ? _img.length > 0 : true);
+    return { ...projetoSemImagem, socios: sociosList, totalInvestido, temImagem };
   }));
   return result;
 }
@@ -124,10 +126,12 @@ export async function getProjeto(id: number) {
   if (!db) return null;
   const result = await db.select().from(projetos).where(eq(projetos.id, id));
   if (!result[0]) return null;
+  const { imagemDados: _img, ...projetoSemImagem } = result[0] as any;
   const sociosList = await getProjetoSocios(id);
   const investList = await listInvestimentos(id);
   const totalInvestido = investList.reduce((acc, i) => acc + Number(i.valor), 0);
-  return { ...result[0], socios: sociosList, investimentos: investList, totalInvestido };
+  const temImagem = _img != null && (Array.isArray(_img) ? _img.length > 0 : true);
+  return { ...projetoSemImagem, socios: sociosList, investimentos: investList, totalInvestido, temImagem };
 }
 
 export async function createProjeto(data: InsertProjeto) {

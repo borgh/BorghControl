@@ -297,7 +297,8 @@ export const appRouter = router({
         const dadosImagem = imagemBase64 ? Buffer.from(imagemBase64, "base64") : undefined;
         const projeto = await createProjeto({ ...projetoData, imagemDados: dadosImagem, imagemMime });
         if (socioIds && socioIds.length > 0) await setProjetoSocios(projeto.id, socioIds);
-        return projeto;
+        const { imagemDados: _imgCreate, ...projetoSemImagem } = projeto as any;
+        return projetoSemImagem;
       }),
     update: publicProcedure
       .input(z.object({
@@ -317,7 +318,8 @@ export const appRouter = router({
         const dadosImagem = imagemBase64 ? Buffer.from(imagemBase64, "base64") : undefined;
         const projeto = await updateProjeto(id, { ...data, ...(dadosImagem ? { imagemDados: dadosImagem, imagemMime: imagemMime ?? undefined } : {}) });
         if (socioIds !== undefined) await setProjetoSocios(id, socioIds);
-        return projeto;
+        const { imagemDados: _imgUpdate, ...projetoSemImagem2 } = projeto as any;
+        return projetoSemImagem2;
       }),
     delete: publicProcedure
       .input(z.object({ id: z.number() }))

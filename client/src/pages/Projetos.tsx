@@ -472,15 +472,19 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
           ) : (
             <div className="space-y-2">
               {investimentos.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-green-700">{formatCurrency(Number(inv.valor))}</span>
-                      <span className="text-xs text-muted-foreground">{formatDate(inv.data)}</span>
-                        {inv.destinoNome && <Badge variant="outline" className="text-xs">{inv.destinoNome}</Badge>}
-                      {(inv as any).investidorNome && <Badge variant="secondary" className="text-xs">👤 {(inv as any).investidorNome}</Badge>}
+                <div key={inv.id} className="flex items-start justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-green-700 shrink-0">{formatCurrency(Number(inv.valor))}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{formatDate(inv.data)}</span>
                     </div>
-                    {inv.descricao && <p className="text-xs text-muted-foreground mt-0.5">{inv.descricao}</p>}
+                    {(inv.destinoNome || (inv as any).investidorNome) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {inv.destinoNome && <Badge variant="outline" className="text-xs">{inv.destinoNome}</Badge>}
+                        {(inv as any).investidorNome && <Badge variant="secondary" className="text-xs">👤 {(inv as any).investidorNome}</Badge>}
+                      </div>
+                    )}
+                    {inv.descricao && <p className="text-xs text-muted-foreground mt-0.5 truncate">{inv.descricao}</p>}
                   </div>
                   <div className="flex gap-1">
                     <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setEditInvest(inv); setShowModalInvest(true); }}>

@@ -21,13 +21,25 @@ import { Loader2 } from "lucide-react";
 import PWAInstallPrompt from "./components/PWAInstallPrompt";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, error } = useAuth();
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+  // Só redireciona para login se não há sessão E não houve erro de rede/servidor
+  // Erros de rede (fetch failed, 502, etc.) não devem deslogar o usuário
+  if (!isAuthenticated && error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Reconectando...</p>
         </div>
       </div>
     );

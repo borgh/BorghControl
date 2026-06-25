@@ -265,17 +265,32 @@ export async function getDashboardProjetos() {
     count: sql<number>`COUNT(*)`,
   }).from(projetos).groupBy(projetos.status);
 
-  // Total investido por projeto
-  const investPorProjeto = await db.select({
-    projetoId: investimentos.projetoId,
-    projetoNome: projetos.nome,
-    total: sql<number>`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`,
+  // Montar objeto porStatus
+  const porStatus: Record<string, number> = {
+    em_andamento: 0,
+    pendente: 0,
+    aguardando_recurso: 0,
+    concluido: 0,
+  };
+  for (const s of statusCount) {
+    if (s.status) porStatus[s.status] = Number(s.count);
+  }
+
+  // Total de sócios
+  const totalSociosResult = await db.select({ count: sql<number>`COUNT(*)` }).from(socios);
+  const totalSocios = Number(totalSociosResult[0]?.count ?? 0);
+
+  // Top 5 projetos por investimento
+  const top5Projetos = await db.select({
+    id: projetos.id,
+    nome: projetos.nome,
+    totalInvestido: sql<number>`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`,
   })
-    .from(investimentos)
-    .leftJoin(projetos, eq(investimentos.projetoId, projetos.id))
-    .groupBy(investimentos.projetoId, projetos.nome)
-    .orderBy(desc(sql`SUM(CAST(${investimentos.valor} AS NUMERIC))`))
-    .limit(10);
+    .from(projetos)
+    .leftJoin(investimentos, eq(investimentos.projetoId, projetos.id))
+    .groupBy(projetos.id, projetos.nome)
+    .orderBy(desc(sql`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`))
+    .limit(5);
 
   // Total investido por destino
   const investPorDestino = await db.select({
@@ -288,29 +303,48 @@ export async function getDashboardProjetos() {
     .groupBy(investimentos.destinoId, destinosInvestimento.nome)
     .orderBy(desc(sql`SUM(CAST(${investimentos.valor} AS NUMERIC))`));
 
-  // Investimentos por mês (últimos 12 meses)
-  const investPorMes = await db.select({
-    mes: sql<string>`TO_CHAR(${investimentos.data}::date, 'YYYY-MM')`,
-    total: sql<number>`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`,
-  })
-    .from(investimentos)
-    .where(sql`${investimentos.data}::date >= NOW() - INTERVAL '12 months'`)
-    .groupBy(sql`TO_CHAR(${investimentos.data}::date, 'YYYY-MM')`)
-    .orderBy(sql`TO_CHAR(${investimentos.data}::date, 'YYYY-MM')`);
-
-  // Total geral
+  // Total geral investido
   const totalGeral = await db.select({
     total: sql<number>`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`,
   }).from(investimentos);
 
   const totalProjetos = await db.select({ count: sql<number>`COUNT(*)` }).from(projetos);
 
+  // Projetos recentes com sócios e total investido
+  const projetosRecentes = await db.select({
+    id: projetos.id,
+    nome: projetos.nome,
+    status: projetos.status,
+    imagemUrl: projetos.imagemUrl,
+    totalInvestido: sql<number>`COALESCE(SUM(CAST(${investimentos.valor} AS NUMERIC)), 0)`,
+  })
+    .from(projetos)
+    .leftJoin(investimentos, eq(investimentos.projetoId, projetos.id))
+    .groupBy(projetos.id, projetos.nome, projetos.status, projetos.imagemUrl)
+    .orderBy(desc(projetos.id))
+    .limit(5);
+
+  // Buscar sócios para cada projeto recente
+  const projetosComSocios = await Promise.all(
+    projetosRecentes.map(async (p) => {
+      const sociosResult = await db!.select({
+        socioId: projetoSocios.socioId,
+        socioNome: socios.nome,
+      })
+        .from(projetoSocios)
+        .leftJoin(socios, eq(projetoSocios.socioId, socios.id))
+        .where(eq(projetoSocios.projetoId, p.id));
+      return { ...p, totalInvestido: Number(p.totalInvestido), socios: sociosResult };
+    })
+  );
+
   return {
-    statusCount: statusCount.map((s) => ({ status: s.status, count: Number(s.count) })),
-    investPorProjeto: investPorProjeto.map((i) => ({ ...i, total: Number(i.total) })),
-    investPorDestino: investPorDestino.map((i) => ({ ...i, total: Number(i.total) })),
-    investPorMes: investPorMes.map((i) => ({ mes: i.mes, total: Number(i.total) })),
+    porStatus,
+    totalSocios,
     totalInvestido: Number(totalGeral[0]?.total ?? 0),
     totalProjetos: Number(totalProjetos[0]?.count ?? 0),
+    top5Projetos: top5Projetos.map((p) => ({ ...p, totalInvestido: Number(p.totalInvestido) })),
+    investPorDestino: investPorDestino.map((i) => ({ ...i, total: Number(i.total) })),
+    projetosRecentes: projetosComSocios,
   };
 }

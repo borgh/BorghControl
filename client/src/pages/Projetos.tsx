@@ -200,10 +200,11 @@ function ModalInvestimento({ open, onClose, projetoId, investimento, projetoSoci
 }
 
 // ─── Modal de Projeto ─────────────────────────────────────────────────────────
-function ModalProjeto({ open, onClose, projeto, onSaved }: {
+function ModalProjeto({ open, onClose, projeto, onSaved, imgBust }: {
   open: boolean; onClose: () => void;
   projeto?: any | null;
   onSaved: (projetoId?: number) => void;
+  imgBust?: number;
 }) {
   const [nome, setNome] = useState(projeto?.nome ?? "");
   const [descricao, setDescricao] = useState(projeto?.descricao ?? "");
@@ -211,7 +212,7 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   const [status, setStatus] = useState<StatusProjeto>(projeto?.status ?? "pendente");
   // imagemPreview: data URL para exibir no modal (base64 ou URL da API)
   const [imagemPreview, setImagemPreview] = useState<string | null>(
-    projeto?.id ? `/api/projetos/imagem/${projeto.id}` : null
+    projeto?.id ? `/api/projetos/imagem/${projeto.id}?v=${imgBust ?? Date.now()}` : null
   );
   const [imagemBase64, setImagemBase64] = useState<string | null>(null);
   const [imagemMime, setImagemMime] = useState<string | null>(null);
@@ -783,6 +784,7 @@ export default function Projetos() {
           open={showModal}
           onClose={() => { setShowModal(false); setEditProjeto(null); }}
           projeto={editProjeto}
+          imgBust={editProjeto?.id ? imgBustMap[editProjeto.id] : undefined}
           onSaved={(projetoId?: number) => {
             if (projetoId) setImgBustMap(prev => ({ ...prev, [projetoId]: Date.now() }));
             utils.projetos.list.invalidate();

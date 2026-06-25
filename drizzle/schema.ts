@@ -11,7 +11,12 @@ import {
   serial,
   date,
   bigint,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() { return "bytea"; },
+});
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 export const roleEnum = pgEnum("role", ["user", "admin"]);
@@ -128,6 +133,8 @@ export const projetos = pgTable("projetos", {
   status: statusProjetoEnum("status").default("pendente").notNull(),
   imagemUrl: text("imagem_url"),
   imagemKey: text("imagem_key"),
+  imagemDados: bytea("imagem_dados"),
+  imagemMime: varchar("imagem_mime", { length: 100 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

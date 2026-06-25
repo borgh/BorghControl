@@ -193,8 +193,12 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   const [descricao, setDescricao] = useState(projeto?.descricao ?? "");
   const [dataInicio, setDataInicio] = useState(projeto?.dataInicio ?? "");
   const [status, setStatus] = useState<StatusProjeto>(projeto?.status ?? "pendente");
-  const [imagemUrl, setImagemUrl] = useState<string | null>(projeto?.imagemUrl ?? null);
-  const [imagemKey, setImagemKey] = useState<string | null>(projeto?.imagemKey ?? null);
+  // imagemPreview: data URL para exibir no modal (base64 ou URL da API)
+  const [imagemPreview, setImagemPreview] = useState<string | null>(
+    projeto?.id ? `/api/projetos/imagem/${projeto.id}` : null
+  );
+  const [imagemBase64, setImagemBase64] = useState<string | null>(null);
+  const [imagemMime, setImagemMime] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedSocios, setSelectedSocios] = useState<Array<{ socioId: number; percentual?: number }>>(
     projeto?.socios?.map((s: any) => ({ socioId: s.socioId, percentual: s.percentual ? Number(s.percentual) : undefined })) ?? []
@@ -221,9 +225,11 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
       const resp = await fetch("/api/projetos/upload-imagem", { method: "POST", body: formData });
       const data = await resp.json();
       if (data.success) {
-        setImagemUrl(data.url);
-        setImagemKey(data.key);
-        toast.success("Imagem enviada!");
+        // Armazena base64 para enviar via tRPC e preview
+        setImagemBase64(data.data);
+        setImagemMime(data.mime);
+        setImagemPreview(data.url); // data URL para preview
+        toast.success("Imagem selecionada!");
       } else {
         toast.error(data.error ?? "Erro ao enviar imagem");
       }
@@ -249,8 +255,8 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
       descricao: descricao || undefined,
       dataInicio: dataInicio || undefined,
       status,
-      imagemUrl: imagemUrl ?? undefined,
-      imagemKey: imagemKey ?? undefined,
+      imagemBase64: imagemBase64 ?? undefined,
+      imagemMime: imagemMime ?? undefined,
       socioIds: selectedSocios,
     };
     if (projeto) {
@@ -274,12 +280,12 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
                 style={{ minHeight: 120 }}
                 onClick={() => fileInputRef.current?.click()}
               >
-                {imagemUrl ? (
+                {imagemPreview ? (
                   <div className="relative w-full">
-                    <img src={imagemUrl} alt="Imagem do projeto" className="w-full max-h-48 object-cover rounded-md" />
+                    <img src={imagemPreview} alt="Imagem do projeto" className="w-full max-h-48 object-cover rounded-md" onError={() => setImagemPreview(null)} />
                     <button
                       className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"
-                      onClick={(e) => { e.stopPropagation(); setImagemUrl(null); setImagemKey(null); }}
+                      onClick={(e) => { e.stopPropagation(); setImagemPreview(null); setImagemBase64(null); setImagemMime(null); }}
                     ><X className="h-3 w-3" /></button>
                   </div>
                 ) : (
@@ -394,8 +400,8 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-start gap-4">
-            {projeto.imagemUrl && (
-              <img src={projeto.imagemUrl} alt={projeto.nome} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" />
+            {projeto.id && (
+              <img src={`/api/projetos/imagem/${projeto.id}`} alt={projeto.nome} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             )}
             <div className="flex-1">
               <DialogTitle className="text-xl">{projeto.nome}</DialogTitle>
@@ -557,8 +563,8 @@ export default function Projetos() {
             <Card key={p.id} className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
               onClick={() => setDetalheProjeto(p)}>
               <div className="relative h-36 bg-muted">
-                {p.imagemUrl ? (
-                  <img src={p.imagemUrl} alt={p.nome} className="w-full h-full object-cover" />
+                {p.id ? (
+                  <img src={`/api/projetos/imagem/${p.id}`} alt={p.nome} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <FolderOpen className="h-12 w-12 text-muted-foreground/40" />
@@ -612,8 +618,8 @@ export default function Projetos() {
                   onClick={() => setDetalheProjeto(p)}>
                   <td className="p-3">
                     <div className="flex items-center gap-3">
-                      {p.imagemUrl ? (
-                        <img src={p.imagemUrl} alt={p.nome} className="w-8 h-8 object-cover rounded" />
+                      {p.id ? (
+                        <img src={`/api/projetos/imagem/${p.id}`} alt={p.nome} className="w-8 h-8 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
                           <FolderOpen className="h-4 w-4 text-muted-foreground" />

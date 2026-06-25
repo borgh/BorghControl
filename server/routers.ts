@@ -288,11 +288,14 @@ export const appRouter = router({
         status: z.enum(["em_andamento", "pendente", "aguardando_recurso", "concluido"]).default("pendente"),
         imagemUrl: z.string().optional(),
         imagemKey: z.string().optional(),
+        imagemBase64: z.string().optional(),
+        imagemMime: z.string().optional(),
         socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { socioIds, ...projetoData } = input;
-        const projeto = await createProjeto(projetoData);
+        const { socioIds, imagemBase64, imagemMime, ...projetoData } = input;
+        const dadosImagem = imagemBase64 ? Buffer.from(imagemBase64, "base64") : undefined;
+        const projeto = await createProjeto({ ...projetoData, imagemDados: dadosImagem, imagemMime });
         if (socioIds && socioIds.length > 0) await setProjetoSocios(projeto.id, socioIds);
         return projeto;
       }),
@@ -305,11 +308,14 @@ export const appRouter = router({
         status: z.enum(["em_andamento", "pendente", "aguardando_recurso", "concluido"]).optional(),
         imagemUrl: z.string().optional().nullable(),
         imagemKey: z.string().optional().nullable(),
+        imagemBase64: z.string().optional().nullable(),
+        imagemMime: z.string().optional().nullable(),
         socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
       }))
       .mutation(async ({ input }) => {
-        const { id, socioIds, ...data } = input;
-        const projeto = await updateProjeto(id, data);
+        const { id, socioIds, imagemBase64, imagemMime, ...data } = input;
+        const dadosImagem = imagemBase64 ? Buffer.from(imagemBase64, "base64") : undefined;
+        const projeto = await updateProjeto(id, { ...data, ...(dadosImagem ? { imagemDados: dadosImagem, imagemMime: imagemMime ?? undefined } : {}) });
         if (socioIds !== undefined) await setProjetoSocios(id, socioIds);
         return projeto;
       }),

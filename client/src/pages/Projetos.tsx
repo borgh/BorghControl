@@ -203,7 +203,7 @@ function ModalInvestimento({ open, onClose, projetoId, investimento, projetoSoci
 function ModalProjeto({ open, onClose, projeto, onSaved }: {
   open: boolean; onClose: () => void;
   projeto?: any | null;
-  onSaved: () => void;
+  onSaved: (projetoId?: number) => void;
 }) {
   const [nome, setNome] = useState(projeto?.nome ?? "");
   const [descricao, setDescricao] = useState(projeto?.descricao ?? "");
@@ -217,6 +217,8 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   const [imagemMime, setImagemMime] = useState<string | null>(null);
   const [imagemFit, setImagemFit] = useState<"cover" | "contain">(projeto?.imagemFit === "contain" ? "contain" : "cover");
   const [uploading, setUploading] = useState(false);
+  // Flag para saber se a imagem foi trocada (independente de base64 ou upload direto)
+  const imagemFoiTrocadaRef = useRef(false);
   const [selectedSocios, setSelectedSocios] = useState<Array<{ socioId: number; percentual?: number }>>(
     projeto?.socios?.map((s: any) => ({ socioId: s.socioId, percentual: s.percentual ? Number(s.percentual) : undefined })) ?? []
   );
@@ -237,14 +239,17 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   const update = trpc.projetos.update.useMutation({
     onSuccess: async (data) => {
       toast.success("Projeto atualizado!");
-      await utils.projetos.list.invalidate();
-      // Se a imagem foi trocada, invalida o cache da imagem no browser
-      // adicionando um timestamp na URL para forçar reload
-      if (imagemBase64 && data?.id) {
+      // Se a imagem foi trocada, força reload de todas as <img> que referenciam esse projeto
+      // ANTES do invalidate para que o timestamp novo seja aplicado
+      if (imagemFoiTrocadaRef.current && data?.id) {
+        const ts = Date.now();
         const imgs = document.querySelectorAll<HTMLImageElement>(`img[src*="/api/projetos/imagem/${data.id}"]`);
-        imgs.forEach(img => { img.src = `/api/projetos/imagem/${data.id}?t=${Date.now()}`; });
+        imgs.forEach(img => { img.src = `/api/projetos/imagem/${data.id}?t=${ts}`; });
+        imagemFoiTrocadaRef.current = false;
       }
-      onSaved();
+      // Usa refetch para garantir dados frescos do servidor imediatamente
+      await utils.projetos.list.refetch();
+      onSaved(data?.id);
       onClose();
     },
     onError: (e) => toast.error(e.message),
@@ -268,6 +273,7 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
           setImagemPreview(`/api/projetos/imagem/${projeto.id}?t=${Date.now()}`);
           setImagemBase64(null); // não precisa enviar via tRPC
           setImagemMime(null);
+          imagemFoiTrocadaRef.current = true; // marca que a imagem foi trocada
           toast.success("Imagem atualizada!");
         } else {
           // Novo projeto: armazena base64 para enviar junto com o create
@@ -587,13 +593,14 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
 
 // ─── Página Principal ─────────────────────────────────────────────────────────
 export default function Projetos() {
-  const [viewMode, setViewMode] = useState<"lista" | "icones">("icones");
+    const [viewMode, setViewMode] = useState<"lista" | "icones">("icones");
   const [busca, setBusca] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editProjeto, setEditProjeto] = useState<any | null>(null);
   const [detalheProjeto, setDetalheProjeto] = useState<any | null>(null);
+  // Mapa de cache-busting: projetoId → timestamp. Atualizado ao salvar para forçar reload da imagem.
+  const [imgBustMap, setImgBustMap] = useState<Record<number, number>>({});
   const utils = trpc.useUtils();
-
   const { data: projetos = [], isLoading, refetch: refetchProjetos } = trpc.projetos.list.useQuery(busca ? { busca } : undefined);
   const deleteProjeto = trpc.projetos.delete.useMutation({
     onSuccess: () => { toast.success("Projeto removido!"); utils.projetos.list.invalidate(); },
@@ -657,7 +664,7 @@ export default function Projetos() {
               <div className="relative bg-muted overflow-hidden" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
                 {p.id ? (
                   <img
-                    src={`/api/projetos/imagem/${p.id}?v=${p.updatedAt ? new Date(p.updatedAt).getTime() : p.id}`}
+                    src={`/api/projetos/imagem/${p.id}?v=${imgBustMap[p.id] ?? (p.updatedAt ? new Date(p.updatedAt).getTime() : p.id)}`}
                     alt={p.nome}
                     className={`absolute inset-0 w-full h-full transition-transform duration-300 group-hover:scale-105 ${p.imagemFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     onError={(e) => {
@@ -726,7 +733,7 @@ export default function Projetos() {
                   <td className="p-3">
                     <div className="flex items-center gap-3">
                       {p.id ? (
-                        <img src={`/api/projetos/imagem/${p.id}?v=${p.updatedAt ? new Date(p.updatedAt).getTime() : p.id}`} alt={p.nome} className="w-8 h-8 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <img src={`/api/projetos/imagem/${p.id}?v=${imgBustMap[p.id] ?? (p.updatedAt ? new Date(p.updatedAt).getTime() : p.id)}`} alt={p.nome} className="w-8 h-8 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
                           <FolderOpen className="h-4 w-4 text-muted-foreground" />
@@ -776,7 +783,11 @@ export default function Projetos() {
           open={showModal}
           onClose={() => { setShowModal(false); setEditProjeto(null); }}
           projeto={editProjeto}
-          onSaved={() => { utils.projetos.list.invalidate(); refetchProjetos(); }}
+          onSaved={(projetoId?: number) => {
+            if (projetoId) setImgBustMap(prev => ({ ...prev, [projetoId]: Date.now() }));
+            utils.projetos.list.invalidate();
+            refetchProjetos();
+          }}
         />
       )}
       {detalheProjeto && (

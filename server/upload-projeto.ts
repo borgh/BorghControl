@@ -86,16 +86,25 @@ export function registerUploadProjetoRoutes(app: Express) {
       const client = await pool.connect();
       try {
         const result = await client.query(
-          `SELECT imagem_dados, imagem_mime FROM projetos WHERE id = $1`,
+          `SELECT imagem_dados, imagem_mime, "updatedAt" FROM projetos WHERE id = $1`,
           [id]
         );
         if (result.rows.length === 0 || !result.rows[0].imagem_dados) {
           res.status(404).send("Imagem não encontrada.");
           return;
         }
-        const { imagem_dados, imagem_mime } = result.rows[0];
+        const { imagem_dados, imagem_mime, updatedAt } = result.rows[0];
+        // ETag baseado no timestamp de atualização — garante recarregamento quando a imagem muda
+        const etag = `"proj-${id}-${updatedAt ? new Date(updatedAt).getTime() : Date.now()}"`;
+        if (req.headers['if-none-match'] === etag) {
+          res.status(304).end();
+          return;
+        }
         res.setHeader("Content-Type", imagem_mime || "image/jpeg");
-        res.setHeader("Cache-Control", "no-cache, must-revalidate");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.setHeader("Expires", "0");
+        res.setHeader("ETag", etag);
         res.send(imagem_dados);
       } finally {
         client.release();

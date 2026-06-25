@@ -487,7 +487,7 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
         <DialogHeader>
           <div className="flex items-start gap-4">
             {projeto.id && (
-              <img src={`/api/projetos/imagem/${projeto.id}`} alt={projeto.nome} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src={`/api/projetos/imagem/${projeto.id}?v=${projeto.updatedAt ? new Date(projeto.updatedAt).getTime() : projeto.id}`} alt={projeto.nome} className="w-16 h-16 object-cover rounded-lg flex-shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             )}
             <div className="flex-1">
               <DialogTitle className="text-xl">{projeto.nome}</DialogTitle>
@@ -657,7 +657,7 @@ export default function Projetos() {
               <div className="relative bg-muted overflow-hidden" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
                 {p.id ? (
                   <img
-                    src={`/api/projetos/imagem/${p.id}`}
+                    src={`/api/projetos/imagem/${p.id}?v=${p.updatedAt ? new Date(p.updatedAt).getTime() : p.id}`}
                     alt={p.nome}
                     className={`absolute inset-0 w-full h-full transition-transform duration-300 group-hover:scale-105 ${p.imagemFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     onError={(e) => {
@@ -726,7 +726,7 @@ export default function Projetos() {
                   <td className="p-3">
                     <div className="flex items-center gap-3">
                       {p.id ? (
-                        <img src={`/api/projetos/imagem/${p.id}`} alt={p.nome} className="w-8 h-8 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <img src={`/api/projetos/imagem/${p.id}?v=${p.updatedAt ? new Date(p.updatedAt).getTime() : p.id}`} alt={p.nome} className="w-8 h-8 object-cover rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                       ) : (
                         <div className="w-8 h-8 bg-muted rounded flex items-center justify-center">
                           <FolderOpen className="h-4 w-4 text-muted-foreground" />

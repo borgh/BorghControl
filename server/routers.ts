@@ -328,10 +328,10 @@ export const appRouter = router({
       .input(z.object({ projetoId: z.number() }))
       .query(async ({ input }) => listInvestimentos(input.projetoId)),
     createInvestimento: publicProcedure
-      .input(z.object({ projetoId: z.number(), valor: z.string(), data: z.string(), destinoId: z.number().optional().nullable(), descricao: z.string().optional() }))
+      .input(z.object({ projetoId: z.number(), valor: z.string(), data: z.string(), destinoId: z.number().optional().nullable(), socioId: z.number().optional().nullable(), descricao: z.string().optional() }))
       .mutation(async ({ input }) => createInvestimento(input)),
     updateInvestimento: publicProcedure
-      .input(z.object({ id: z.number(), valor: z.string().optional(), data: z.string().optional(), destinoId: z.number().optional().nullable(), descricao: z.string().optional() }))
+      .input(z.object({ id: z.number(), valor: z.string().optional(), data: z.string().optional(), destinoId: z.number().optional().nullable(), socioId: z.number().optional().nullable(), descricao: z.string().optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; return updateInvestimento(id, data); }),
     deleteInvestimento: publicProcedure
       .input(z.object({ id: z.number() }))

@@ -156,6 +156,7 @@ export const investimentos = pgTable("investimentos", {
   valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
   data: date("data").notNull(),
   destinoId: integer("destino_id"),
+  socioId: integer("socio_id"),
   descricao: text("descricao"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),

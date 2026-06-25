@@ -208,12 +208,15 @@ export async function listInvestimentos(projetoId: number) {
       valor: investimentos.valor,
       data: investimentos.data,
       destinoId: investimentos.destinoId,
+      socioId: investimentos.socioId,
       descricao: investimentos.descricao,
       createdAt: investimentos.createdAt,
       destinoNome: destinosInvestimento.nome,
+      investidorNome: socios.nome,
     })
     .from(investimentos)
     .leftJoin(destinosInvestimento, eq(investimentos.destinoId, destinosInvestimento.id))
+    .leftJoin(socios, eq(investimentos.socioId, socios.id))
     .where(eq(investimentos.projetoId, projetoId))
     .orderBy(desc(investimentos.data));
 }

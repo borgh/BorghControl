@@ -98,14 +98,16 @@ function ModalSocio({ open, onClose, socio, onSaved }: {
 }
 
 // ─── Modal de Investimento ────────────────────────────────────────────────────
-function ModalInvestimento({ open, onClose, projetoId, investimento, onSaved }: {
+function ModalInvestimento({ open, onClose, projetoId, investimento, projetoSocios, onSaved }: {
   open: boolean; onClose: () => void; projetoId: number;
-  investimento?: { id: number; valor: string; data: string; destinoId?: number | null; descricao?: string | null } | null;
+  investimento?: { id: number; valor: string; data: string; destinoId?: number | null; socioId?: number | null; descricao?: string | null } | null;
+  projetoSocios?: Array<{ socioId: number; nome: string }>;
   onSaved: () => void;
 }) {
   const [valor, setValor] = useState(investimento?.valor ? String(Number(investimento.valor)) : "");
   const [data, setData] = useState(investimento?.data ?? new Date().toISOString().split("T")[0]);
   const [destinoId, setDestinoId] = useState<string>(investimento?.destinoId ? String(investimento.destinoId) : "");
+  const [socioId, setSocioId] = useState<string>(investimento?.socioId ? String(investimento.socioId) : "");
   const [descricao, setDescricao] = useState(investimento?.descricao ?? "");
   const [novoDestino, setNovoDestino] = useState("");
   const [showNovoDestino, setShowNovoDestino] = useState(false);
@@ -128,7 +130,7 @@ function ModalInvestimento({ open, onClose, projetoId, investimento, onSaved }: 
     const v = parseFloat(valor.replace(",", "."));
     if (!valor || isNaN(v) || v <= 0) { toast.error("Valor inválido"); return; }
     if (!data) { toast.error("Data é obrigatória"); return; }
-    const payload = { valor: String(v), data, destinoId: destinoId ? Number(destinoId) : null, descricao: descricao || undefined };
+    const payload = { valor: String(v), data, destinoId: destinoId ? Number(destinoId) : null, socioId: (socioId && socioId !== "__none__") ? Number(socioId) : null, descricao: descricao || undefined };
     if (investimento) {
       update.mutate({ id: investimento.id, ...payload });
     } else {
@@ -149,6 +151,20 @@ function ModalInvestimento({ open, onClose, projetoId, investimento, onSaved }: 
             <Label>Data *</Label>
             <Input value={data} onChange={(e) => setData(e.target.value)} type="date" />
           </div>
+          {projetoSocios && projetoSocios.length > 0 && (
+            <div>
+              <Label>Investidor (Quem fez este investimento)</Label>
+              <Select value={socioId} onValueChange={setSocioId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o investidor" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Não especificado</SelectItem>
+                  {projetoSocios.map((s) => (
+                    <SelectItem key={s.socioId} value={String(s.socioId)}>{s.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div>
             <Label>Destino do Investimento</Label>
             <Select value={destinoId} onValueChange={(v) => { if (v === "__novo__") setShowNovoDestino(true); else setDestinoId(v); }}>
@@ -461,7 +477,8 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-green-700">{formatCurrency(Number(inv.valor))}</span>
                       <span className="text-xs text-muted-foreground">{formatDate(inv.data)}</span>
-                      {inv.destinoNome && <Badge variant="outline" className="text-xs">{inv.destinoNome}</Badge>}
+                        {inv.destinoNome && <Badge variant="outline" className="text-xs">{inv.destinoNome}</Badge>}
+                      {(inv as any).investidorNome && <Badge variant="secondary" className="text-xs">👤 {(inv as any).investidorNome}</Badge>}
                     </div>
                     {inv.descricao && <p className="text-xs text-muted-foreground mt-0.5">{inv.descricao}</p>}
                   </div>
@@ -486,6 +503,7 @@ function DetalhesProjeto({ projeto, onClose, onEdit }: { projeto: any; onClose: 
           onClose={() => { setShowModalInvest(false); setEditInvest(null); }}
           projetoId={projeto.id}
           investimento={editInvest}
+          projetoSocios={projeto.socios?.map((s: any) => ({ socioId: s.socioId, nome: s.socioNome }))}
           onSaved={() => refetch()}
         />
       )}

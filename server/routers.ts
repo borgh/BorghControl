@@ -290,6 +290,7 @@ export const appRouter = router({
         imagemKey: z.string().optional(),
         imagemBase64: z.string().optional(),
         imagemMime: z.string().optional(),
+        imagemFit: z.string().optional(),
         socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
       }))
       .mutation(async ({ input }) => {
@@ -311,6 +312,7 @@ export const appRouter = router({
         imagemKey: z.string().optional().nullable(),
         imagemBase64: z.string().optional().nullable(),
         imagemMime: z.string().optional().nullable(),
+        imagemFit: z.string().optional().nullable(),
         socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
       }))
       .mutation(async ({ input }) => {

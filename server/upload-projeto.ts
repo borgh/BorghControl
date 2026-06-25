@@ -95,7 +95,7 @@ export function registerUploadProjetoRoutes(app: Express) {
         }
         const { imagem_dados, imagem_mime } = result.rows[0];
         res.setHeader("Content-Type", imagem_mime || "image/jpeg");
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Cache-Control", "no-cache, must-revalidate");
         res.send(imagem_dados);
       } finally {
         client.release();

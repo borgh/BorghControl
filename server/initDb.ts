@@ -196,6 +196,11 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_anexos_transacao ON transacao_anexos (transacao_id);
       `);
 
+      // Migrations de colunas adicionadas após criação inicial das tabelas
+      await client.query(`
+        ALTER TABLE IF EXISTS projetos ADD COLUMN IF NOT EXISTS imagem_fit VARCHAR(20) DEFAULT 'cover';
+      `);
+
       // Seed categorias
       const catCount = await client.query('SELECT COUNT(*) FROM "categorias"');
       if (parseInt(catCount.rows[0].count) === 0) {

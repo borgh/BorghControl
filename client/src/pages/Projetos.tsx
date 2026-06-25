@@ -215,6 +215,7 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   );
   const [imagemBase64, setImagemBase64] = useState<string | null>(null);
   const [imagemMime, setImagemMime] = useState<string | null>(null);
+  const [imagemFit, setImagemFit] = useState<"cover" | "contain">(projeto?.imagemFit === "contain" ? "contain" : "cover");
   const [uploading, setUploading] = useState(false);
   const [selectedSocios, setSelectedSocios] = useState<Array<{ socioId: number; percentual?: number }>>(
     projeto?.socios?.map((s: any) => ({ socioId: s.socioId, percentual: s.percentual ? Number(s.percentual) : undefined })) ?? []
@@ -225,11 +226,27 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
   const { data: socios = [], refetch: refetchSocios } = trpc.projetos.listSocios.useQuery();
 
   const create = trpc.projetos.create.useMutation({
-    onSuccess: () => { toast.success("Projeto criado!"); utils.projetos.list.invalidate(); onSaved(); onClose(); },
+    onSuccess: async () => {
+      toast.success("Projeto criado!");
+      await utils.projetos.list.invalidate();
+      onSaved();
+      onClose();
+    },
     onError: (e) => toast.error(e.message),
   });
   const update = trpc.projetos.update.useMutation({
-    onSuccess: () => { toast.success("Projeto atualizado!"); utils.projetos.list.invalidate(); onSaved(); onClose(); },
+    onSuccess: async (data) => {
+      toast.success("Projeto atualizado!");
+      await utils.projetos.list.invalidate();
+      // Se a imagem foi trocada, invalida o cache da imagem no browser
+      // adicionando um timestamp na URL para forçar reload
+      if (imagemBase64 && data?.id) {
+        const imgs = document.querySelectorAll<HTMLImageElement>(`img[src*="/api/projetos/imagem/${data.id}"]`);
+        imgs.forEach(img => { img.src = `/api/projetos/imagem/${data.id}?t=${Date.now()}`; });
+      }
+      onSaved();
+      onClose();
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -238,14 +255,27 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
     try {
       const formData = new FormData();
       formData.append("imagem", file);
+      // Se estiver editando um projeto existente, envia o projetoId para salvar direto no banco
+      if (projeto?.id) {
+        formData.append("projetoId", String(projeto.id));
+      }
       const resp = await fetch("/api/projetos/upload-imagem", { method: "POST", body: formData });
       const data = await resp.json();
       if (data.success) {
-        // Armazena base64 para enviar via tRPC e preview
-        setImagemBase64(data.data);
-        setImagemMime(data.mime);
-        setImagemPreview(data.url); // data URL para preview
-        toast.success("Imagem selecionada!");
+        if (projeto?.id) {
+          // Imagem já foi salva no banco diretamente
+          // Atualiza o preview com timestamp para forçar reload do browser
+          setImagemPreview(`/api/projetos/imagem/${projeto.id}?t=${Date.now()}`);
+          setImagemBase64(null); // não precisa enviar via tRPC
+          setImagemMime(null);
+          toast.success("Imagem atualizada!");
+        } else {
+          // Novo projeto: armazena base64 para enviar junto com o create
+          setImagemBase64(data.data);
+          setImagemMime(data.mime);
+          setImagemPreview(data.url);
+          toast.success("Imagem selecionada!");
+        }
       } else {
         toast.error(data.error ?? "Erro ao enviar imagem");
       }
@@ -273,6 +303,7 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
       status,
       imagemBase64: imagemBase64 ?? undefined,
       imagemMime: imagemMime ?? undefined,
+      imagemFit,
       socioIds: selectedSocios,
     };
     if (projeto) {
@@ -298,7 +329,13 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
               >
                 {imagemPreview ? (
                   <div className="relative w-full">
-                    <img src={imagemPreview} alt="Imagem do projeto" className="w-full max-h-48 object-cover rounded-md" onError={() => setImagemPreview(null)} />
+                    <img
+                      src={imagemPreview}
+                      alt="Imagem do projeto"
+                      className={`w-full max-h-48 rounded-md bg-muted ${imagemFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                      style={{ height: 192 }}
+                      onError={() => setImagemPreview(null)}
+                    />
                     <button
                       className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 hover:bg-black/80"
                       onClick={(e) => { e.stopPropagation(); setImagemPreview(null); setImagemBase64(null); setImagemMime(null); }}
@@ -312,6 +349,39 @@ function ModalProjeto({ open, onClose, projeto, onSaved }: {
                   </div>
                 )}
               </div>
+              {/* Toggle de ajuste de imagem — visível apenas quando há imagem */}
+              {imagemPreview && (
+                <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <span className="text-xs text-muted-foreground">Ajuste:</span>
+                  <div className="flex border rounded-md overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 transition-colors ${
+                        imagemFit === 'cover'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-muted-foreground'
+                      }`}
+                      onClick={() => setImagemFit('cover')}
+                    >
+                      Auto ajuste
+                    </button>
+                    <button
+                      type="button"
+                      className={`px-3 py-1.5 transition-colors border-l ${
+                        imagemFit === 'contain'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'hover:bg-muted text-muted-foreground'
+                      }`}
+                      onClick={() => setImagemFit('contain')}
+                    >
+                      Original
+                    </button>
+                  </div>
+                  <span className="text-xs text-muted-foreground">
+                    {imagemFit === 'cover' ? '(preenche o card)' : '(mostra tudo)'}
+                  </span>
+                </div>
+              )}
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); }} />
             </div>
@@ -524,7 +594,7 @@ export default function Projetos() {
   const [detalheProjeto, setDetalheProjeto] = useState<any | null>(null);
   const utils = trpc.useUtils();
 
-  const { data: projetos = [], isLoading } = trpc.projetos.list.useQuery(busca ? { busca } : undefined);
+  const { data: projetos = [], isLoading, refetch: refetchProjetos } = trpc.projetos.list.useQuery(busca ? { busca } : undefined);
   const deleteProjeto = trpc.projetos.delete.useMutation({
     onSuccess: () => { toast.success("Projeto removido!"); utils.projetos.list.invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -584,12 +654,27 @@ export default function Projetos() {
           {projetos.map((p) => (
             <Card key={p.id} className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer group"
               onClick={() => setDetalheProjeto(p)}>
-              <div className="relative h-36 bg-muted">
+              <div className="relative bg-muted overflow-hidden" style={{ paddingBottom: '56.25%' /* 16:9 aspect ratio */ }}>
                 {p.id ? (
-                  <img src={`/api/projetos/imagem/${p.id}`} alt={p.nome} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img
+                    src={`/api/projetos/imagem/${p.id}`}
+                    alt={p.nome}
+                    className={`absolute inset-0 w-full h-full transition-transform duration-300 group-hover:scale-105 ${p.imagemFit === 'contain' ? 'object-contain' : 'object-cover'}`}
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        const placeholder = document.createElement('div');
+                        placeholder.className = 'absolute inset-0 flex items-center justify-center';
+                        placeholder.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-muted-foreground/30" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 7a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M3 7l9 6 9-6"/></svg>';
+                        parent.appendChild(placeholder);
+                      }
+                    }}
+                  />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <FolderOpen className="h-12 w-12 text-muted-foreground/40" />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <FolderOpen className="h-12 w-12 text-muted-foreground/30" />
                   </div>
                 )}
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -691,7 +776,7 @@ export default function Projetos() {
           open={showModal}
           onClose={() => { setShowModal(false); setEditProjeto(null); }}
           projeto={editProjeto}
-          onSaved={() => utils.projetos.list.invalidate()}
+          onSaved={() => { utils.projetos.list.invalidate(); refetchProjetos(); }}
         />
       )}
       {detalheProjeto && (

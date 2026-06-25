@@ -135,6 +135,7 @@ export const projetos = pgTable("projetos", {
   imagemKey: text("imagem_key"),
   imagemDados: bytea("imagem_dados"),
   imagemMime: varchar("imagem_mime", { length: 100 }),
+  imagemFit: varchar("imagem_fit", { length: 20 }).default("cover"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });

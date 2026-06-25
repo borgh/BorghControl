@@ -1,4 +1,11 @@
 import z from "zod";
+import {
+  listSocios, getSocio, createSocio, updateSocio, deleteSocio,
+  listDestinos, createDestino, updateDestino, deleteDestino,
+  listProjetos, getProjeto, createProjeto, updateProjeto, deleteProjeto,
+  setProjetoSocios, listInvestimentos, createInvestimento, updateInvestimento, deleteInvestimento,
+  getDashboardProjetos,
+} from "./db-projetos";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, permissionProcedure, router } from "./_core/trpc";
@@ -240,6 +247,88 @@ export const appRouter = router({
         await saveUserPermissions(input.permissions);
         return { success: true };
       }),
+  }),
+  projetos: router({
+    listSocios: publicProcedure
+      .input(z.object({ busca: z.string().optional() }).optional())
+      .query(async ({ input }) => listSocios(input?.busca)),
+    getSocio: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => getSocio(input.id)),
+    createSocio: publicProcedure
+      .input(z.object({ nome: z.string().min(1), email: z.string().optional(), telefone: z.string().optional(), documento: z.string().optional(), observacao: z.string().optional() }))
+      .mutation(async ({ input }) => createSocio(input)),
+    updateSocio: publicProcedure
+      .input(z.object({ id: z.number(), nome: z.string().min(1).optional(), email: z.string().optional(), telefone: z.string().optional(), documento: z.string().optional(), observacao: z.string().optional() }))
+      .mutation(async ({ input }) => { const { id, ...data } = input; return updateSocio(id, data); }),
+    deleteSocio: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteSocio(input.id)),
+    listDestinos: publicProcedure.query(async () => listDestinos()),
+    createDestino: publicProcedure
+      .input(z.object({ nome: z.string().min(1), descricao: z.string().optional() }))
+      .mutation(async ({ input }) => createDestino(input)),
+    updateDestino: publicProcedure
+      .input(z.object({ id: z.number(), nome: z.string().optional(), descricao: z.string().optional() }))
+      .mutation(async ({ input }) => { const { id, ...data } = input; return updateDestino(id, data); }),
+    deleteDestino: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteDestino(input.id)),
+    list: publicProcedure
+      .input(z.object({ busca: z.string().optional() }).optional())
+      .query(async ({ input }) => listProjetos(input?.busca)),
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => getProjeto(input.id)),
+    create: publicProcedure
+      .input(z.object({
+        nome: z.string().min(1),
+        descricao: z.string().optional(),
+        dataInicio: z.string().optional(),
+        status: z.enum(["em_andamento", "pendente", "aguardando_recurso", "concluido"]).default("pendente"),
+        imagemUrl: z.string().optional(),
+        imagemKey: z.string().optional(),
+        socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { socioIds, ...projetoData } = input;
+        const projeto = await createProjeto(projetoData);
+        if (socioIds && socioIds.length > 0) await setProjetoSocios(projeto.id, socioIds);
+        return projeto;
+      }),
+    update: publicProcedure
+      .input(z.object({
+        id: z.number(),
+        nome: z.string().optional(),
+        descricao: z.string().optional(),
+        dataInicio: z.string().optional().nullable(),
+        status: z.enum(["em_andamento", "pendente", "aguardando_recurso", "concluido"]).optional(),
+        imagemUrl: z.string().optional().nullable(),
+        imagemKey: z.string().optional().nullable(),
+        socioIds: z.array(z.object({ socioId: z.number(), percentual: z.number().optional() })).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, socioIds, ...data } = input;
+        const projeto = await updateProjeto(id, data);
+        if (socioIds !== undefined) await setProjetoSocios(id, socioIds);
+        return projeto;
+      }),
+    delete: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteProjeto(input.id)),
+    listInvestimentos: publicProcedure
+      .input(z.object({ projetoId: z.number() }))
+      .query(async ({ input }) => listInvestimentos(input.projetoId)),
+    createInvestimento: publicProcedure
+      .input(z.object({ projetoId: z.number(), valor: z.string(), data: z.string(), destinoId: z.number().optional().nullable(), descricao: z.string().optional() }))
+      .mutation(async ({ input }) => createInvestimento(input)),
+    updateInvestimento: publicProcedure
+      .input(z.object({ id: z.number(), valor: z.string().optional(), data: z.string().optional(), destinoId: z.number().optional().nullable(), descricao: z.string().optional() }))
+      .mutation(async ({ input }) => { const { id, ...data } = input; return updateInvestimento(id, data); }),
+    deleteInvestimento: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteInvestimento(input.id)),
+    dashboard: publicProcedure.query(async () => getDashboardProjetos()),
   }),
   relatorios: router({
     dashboard: publicProcedure

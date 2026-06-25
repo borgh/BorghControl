@@ -7,7 +7,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
-  Menu, LogOut, ChevronRight, DollarSign, X, Settings
+  Menu, LogOut, ChevronRight, DollarSign, X, Settings,
+  FolderOpen, Users, PieChart, FileText, ChevronDown
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,18 +20,32 @@ const navItems = [
   { href: "/categorias", label: "Categorias", icon: Tag },
 ];
 
-function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: string; icon: any; onClick?: () => void }) {
+const projetosSubItems = [
+  { href: "/projetos", label: "Projetos", icon: FolderOpen },
+  { href: "/projetos/socios", label: "Sócios", icon: Users },
+  { href: "/projetos/dashboard", label: "Dashboard", icon: PieChart },
+  { href: "/projetos/relatorios", label: "Relatórios", icon: FileText },
+];
+
+function NavLink({ href, label, icon: Icon, onClick, indent }: {
+  href: string; label: string; icon: any; onClick?: () => void; indent?: boolean;
+}) {
   const [location] = useLocation();
   const active = location === href;
   return (
     <Link href={href} onClick={onClick}>
       <div className={cn(
-        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer",
+        "flex items-center gap-3 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer",
+        indent ? "px-3 py-2" : "px-3 py-2.5",
         active
           ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
           : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       )}>
-        <Icon className={cn("h-4 w-4 shrink-0", active ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60 group-hover:text-sidebar-accent-foreground")} />
+        <Icon className={cn(
+          "shrink-0",
+          indent ? "h-3.5 w-3.5" : "h-4 w-4",
+          active ? "text-sidebar-primary-foreground" : "text-sidebar-foreground/60 group-hover:text-sidebar-accent-foreground"
+        )} />
         <span>{label}</span>
         {active && <ChevronRight className="h-3 w-3 ml-auto opacity-60" />}
       </div>
@@ -38,9 +53,42 @@ function NavLink({ href, label, icon: Icon, onClick }: { href: string; label: st
   );
 }
 
+function NavGroup({ label, icon: Icon, children, defaultOpen, matchPrefix }: {
+  label: string; icon: any; children: React.ReactNode; defaultOpen?: boolean; matchPrefix?: string;
+}) {
+  const [location] = useLocation();
+  const isActive = matchPrefix ? location.startsWith(matchPrefix) : false;
+  const [open, setOpen] = useState(defaultOpen ?? isActive);
+  return (
+    <div>
+      <button
+        className={cn(
+          "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 group cursor-pointer",
+          isActive
+            ? "bg-sidebar-primary/10 text-sidebar-primary"
+            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        )}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Icon className={cn(
+          "h-4 w-4 shrink-0",
+          isActive ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-sidebar-accent-foreground"
+        )} />
+        <span className="flex-1 text-left">{label}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform duration-200", open ? "rotate-180" : "")} />
+      </button>
+      {open && (
+        <div className="ml-3 mt-0.5 pl-3 border-l border-sidebar-border space-y-0.5">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const initials = user?.name?.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase() ?? "BC";
 
   function goTo(path: string) {
@@ -71,6 +119,23 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         {navItems.map((item) => (
           <NavLink key={item.href} {...item} onClick={onClose} />
         ))}
+
+        {/* Separador */}
+        <div className="pt-2 pb-1">
+          <div className="border-t border-sidebar-border" />
+        </div>
+
+        {/* Menu Projetos e Investimentos */}
+        <NavGroup
+          label="Projetos e Investimentos"
+          icon={FolderOpen}
+          matchPrefix="/projetos"
+          defaultOpen={location.startsWith("/projetos")}
+        >
+          {projetosSubItems.map((item) => (
+            <NavLink key={item.href} {...item} onClick={onClose} indent />
+          ))}
+        </NavGroup>
       </nav>
 
       {/* User menu */}

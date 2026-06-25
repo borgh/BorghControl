@@ -17,6 +17,7 @@ import {
 export const roleEnum = pgEnum("role", ["user", "admin"]);
 export const tipoTransacaoEnum = pgEnum("tipo_transacao", ["despesa", "receita"]);
 export const statusTransacaoEnum = pgEnum("status_transacao", ["pendente", "pago", "cancelado"]);
+export const statusProjetoEnum = pgEnum("status_projeto", ["em_andamento", "pendente", "aguardando_recurso", "concluido"]);
 
 // ─── Usuários ─────────────────────────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -58,21 +59,20 @@ export const transacoes = pgTable(
     valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
     tipo: tipoTransacaoEnum("tipo").notNull(),
     status: statusTransacaoEnum("status").default("pendente").notNull(),
-    vencimentoTexto: varchar("vencimentoTexto", { length: 20 }), // ex: "DIA 10"
-    diaVencimento: integer("diaVencimento"), // número do dia 1-31
-    dataVencimento: date("dataVencimento"),  // data completa YYYY-MM-DD
-    mes: integer("mes").notNull(), // 1-12
-    ano: integer("ano").notNull(), // ex: 2025
+    vencimentoTexto: varchar("vencimentoTexto", { length: 20 }),
+    diaVencimento: integer("diaVencimento"),
+    dataVencimento: date("dataVencimento"),
+    mes: integer("mes").notNull(),
+    ano: integer("ano").notNull(),
     categoriaId: integer("categoriaId"),
     formaPagamento: varchar("formaPagamento", { length: 50 }),
     observacao: text("observacao"),
     recorrente: boolean("recorrente").default(false),
     emitirNF: boolean("emitir_nf").default(false),
     prioridade: boolean("prioridade").notNull().default(false),
-    // Campos de controle de recorrência em série
-    recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }), // UUID do grupo de parcelas
-    totalParcelas: integer("totalParcelas"),   // null = permanente, N = total de parcelas
-    parcelaAtual: integer("parcelaAtual"),     // 1, 2, 3... (null para não-recorrentes)
+    recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }),
+    totalParcelas: integer("totalParcelas"),
+    parcelaAtual: integer("parcelaAtual"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },
@@ -96,3 +96,62 @@ export const systemConfig = pgTable("system_config", {
 });
 
 export type SystemConfig = typeof systemConfig.$inferSelect;
+
+// ─── Projetos e Investimentos ─────────────────────────────────────────────────
+export const socios = pgTable("socios", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }),
+  telefone: varchar("telefone", { length: 30 }),
+  documento: varchar("documento", { length: 30 }),
+  observacao: text("observacao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type Socio = typeof socios.$inferSelect;
+export type InsertSocio = typeof socios.$inferInsert;
+
+export const destinosInvestimento = pgTable("destinos_investimento", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type DestinoInvestimento = typeof destinosInvestimento.$inferSelect;
+export type InsertDestinoInvestimento = typeof destinosInvestimento.$inferInsert;
+
+export const projetos = pgTable("projetos", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 255 }).notNull(),
+  descricao: text("descricao"),
+  dataInicio: date("data_inicio"),
+  status: statusProjetoEnum("status").default("pendente").notNull(),
+  imagemUrl: text("imagem_url"),
+  imagemKey: text("imagem_key"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type Projeto = typeof projetos.$inferSelect;
+export type InsertProjeto = typeof projetos.$inferInsert;
+
+export const projetoSocios = pgTable("projeto_socios", {
+  id: serial("id").primaryKey(),
+  projetoId: integer("projeto_id").notNull(),
+  socioId: integer("socio_id").notNull(),
+  percentual: decimal("percentual", { precision: 5, scale: 2 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type ProjetoSocio = typeof projetoSocios.$inferSelect;
+
+export const investimentos = pgTable("investimentos", {
+  id: serial("id").primaryKey(),
+  projetoId: integer("projeto_id").notNull(),
+  valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
+  data: date("data").notNull(),
+  destinoId: integer("destino_id"),
+  descricao: text("descricao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type Investimento = typeof investimentos.$inferSelect;
+export type InsertInvestimento = typeof investimentos.$inferInsert;

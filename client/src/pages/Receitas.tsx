@@ -98,6 +98,9 @@ export default function Receitas() {
     return Array.from(set).sort((a, b) => b - a);
   }, [anosData]);
 
+  // Quando não há filtro de mês, usar limite alto para retornar todos os registros corretamente
+  const queryLimit = mes === "0" ? 5000 : 500;
+
   const { data, isLoading } = trpc.transacoes.list.useQuery({
     tipo: "receita",
     mes: mes !== "0" ? Number(mes) : undefined,
@@ -105,6 +108,7 @@ export default function Receitas() {
     status: status !== "todos" ? status as any : undefined,
     busca: busca || undefined,
     emitirNF: filtroNF === "sim" ? true : filtroNF === "nao" ? false : undefined,
+    limit: queryLimit,
   });
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };

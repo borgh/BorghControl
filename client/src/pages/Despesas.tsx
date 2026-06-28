@@ -180,6 +180,11 @@ export default function Despesas() {
   // Para "em_atraso" e "vence_em_breve", buscamos todos os pendentes e filtramos no frontend
   const queryStatus = (status === "em_atraso" || status === "vence_em_breve") ? "pendente" : (status !== "todos" ? status as any : undefined);
 
+  // Quando não há filtro de mês (todos os meses), precisamos de limite alto para garantir que
+  // todos os registros sejam retornados antes do filtro de "em_atraso"/"vence_em_breve" no frontend.
+  // Sem isso, o limite padrão de 100 corta o dataset e o filtro retorna resultados incorretos.
+  const queryLimit = mes === "0" ? 5000 : 500;
+
   const { data, isLoading } = trpc.transacoes.list.useQuery({
     tipo: "despesa",
     mes: mes !== "0" ? Number(mes) : undefined,
@@ -187,6 +192,7 @@ export default function Despesas() {
     status: queryStatus,
     busca: busca || undefined,
     prioridade: filtroPrioridade === "sim" ? true : filtroPrioridade === "nao" ? false : undefined,
+    limit: queryLimit,
   });
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };

@@ -6,7 +6,7 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic, setupVite } from "./vite.prod";
 import { initDatabase } from "../initDb";
 import { iniciarCronBackup } from "../backup-cron";
 

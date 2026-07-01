@@ -4,7 +4,7 @@
  */
 import { Pool } from "pg";
 import * as nodemailer from "nodemailer";
-import * as archiver from "archiver";
+import archiver from "archiver";
 import { PassThrough } from "stream";
 import { ENV } from "./_core/env";
 
@@ -189,9 +189,7 @@ async function criarZip(
     passthrough.on("end", () => resolve(Buffer.concat(chunks)));
     passthrough.on("error", reject);
 
-    const archive = (archiver as any).default
-      ? (archiver as any).default("zip", { zlib: { level: 9 } })
-      : (archiver as any)("zip", { zlib: { level: 9 } });
+    const archive = archiver("zip", { zlib: { level: 9 } });
 
     archive.on("error", reject);
     archive.pipe(passthrough);

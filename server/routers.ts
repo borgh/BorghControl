@@ -434,7 +434,7 @@ export const appRouter = router({
     // Executar backup manual
     executarManual: protectedProcedure
       .input(z.object({
-        emailDestino: z.string().email().default("borgh@smfusion.com.br"),
+        emailDestino: z.string().email().default("borghborges@gmail.com"),
         incluirSql: z.boolean().default(true),
         incluirCsv: z.boolean().default(true),
       }))

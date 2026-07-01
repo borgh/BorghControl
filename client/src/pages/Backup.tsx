@@ -99,7 +99,7 @@ function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: strin
 
   useEffect(() => {
     // Iniciar o backup imediatamente
-    executarMut.mutate({ emailDestino: "borgh@smfusion.com.br", incluirSql: true, incluirCsv: true });
+    executarMut.mutate({ emailDestino: "borghborges@gmail.com", incluirSql: true, incluirCsv: true });
 
     // Simular progresso nas etapas (o backend é síncrono, então simulamos)
     let idx = 0;
@@ -241,7 +241,7 @@ const FORM_VAZIO: AgendamentoForm = {
   ativo: true,
   diasSemana: null,
   horario: "03:00",
-  emailDestino: "borgh@smfusion.com.br",
+  emailDestino: "borghborges@gmail.com",
   incluirSql: true,
   incluirCsv: true,
 };
@@ -655,7 +655,7 @@ export default function Backup() {
                 type="email"
                 value={form.emailDestino}
                 onChange={e => setForm(f => ({ ...f, emailDestino: e.target.value }))}
-                placeholder="borgh@smfusion.com.br"
+                placeholder="borghborges@gmail.com"
               />
             </div>
 

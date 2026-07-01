@@ -4,7 +4,9 @@
  */
 import { Pool } from "pg";
 import * as nodemailer from "nodemailer";
-import archiver from "archiver";
+// archiver é carregado via require() para garantir compatibilidade CJS em produção
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const archiverLib = require("archiver") as typeof import("archiver");
 import { PassThrough } from "stream";
 import { ENV } from "./_core/env";
 
@@ -189,7 +191,7 @@ async function criarZip(
     passthrough.on("end", () => resolve(Buffer.concat(chunks)));
     passthrough.on("error", reject);
 
-    const archive = archiver("zip", { zlib: { level: 9 } });
+    const archive = archiverLib("zip", { zlib: { level: 9 } });
 
     archive.on("error", reject);
     archive.pipe(passthrough);

@@ -70,16 +70,18 @@ async function verificarEExecutarAgendamentos(): Promise<void> {
 
       if (!deveExecutar) continue;
 
-      // Verificar se já executou hoje
-      const jaExecutouHoje = await client.query(
+      // Verificar se já executou NESTE horário específico hoje
+      // (permite re-execução se o horário foi editado para outro momento)
+      const jaExecutouNesteHorario = await client.query(
         `SELECT id FROM backup_logs
          WHERE agendamento_id = $1
            AND status IN ('sucesso', 'em_andamento')
-           AND DATE(iniciado_em) = CURRENT_DATE`,
-        [ag.id]
+           AND DATE(iniciado_em AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'
+           AND TO_CHAR(iniciado_em AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') = $2`,
+        [ag.id, horaAtual]
       );
 
-      if (jaExecutouHoje.rows.length > 0) continue;
+      if (jaExecutouNesteHorario.rows.length > 0) continue;
 
       console.log(`[Backup Cron] Executando agendamento #${ag.id} às ${horaAtual}`);
 

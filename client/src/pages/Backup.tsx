@@ -334,14 +334,14 @@ export default function Backup() {
   }, []);
 
   // Rastrear quais agendamentos já foram disparados nesta sessão
-  const disparadosRef = useRef<Set<number>>(new Set());
+  // Chave: "id:HH:MM" para permitir re-disparo após edição de horário
+  const disparadosRef = useRef<Set<string>>(new Set());
 
   // Verificar se algum agendamento deve disparar agora
   const verificarDisparo = useCallback(() => {
     if (executandoBackup) return;
     for (const ag of agendamentos) {
       if (!ag.ativo) continue;
-      if (disparadosRef.current.has(ag.id)) continue;
 
       const [hh, mm] = (ag.horario as string).split(":").map(Number);
       const now = new Date();
@@ -351,9 +351,12 @@ export default function Backup() {
       const diasSemana = ag.diasSemana as number[] | null;
       const diaOk = !diasSemana || diasSemana.length === 0 || diasSemana.includes(now.getDay());
 
-      if (horaLocal === hh && minLocal === mm && diaOk) {
+      // Chave única por agendamento + horário específico (permite re-disparo após edição)
+      const chave = `${ag.id}:${ag.horario}`;
+
+      if (horaLocal === hh && minLocal === mm && diaOk && !disparadosRef.current.has(chave)) {
         // Marcar como disparado para não repetir no mesmo minuto
-        disparadosRef.current.add(ag.id);
+        disparadosRef.current.add(chave);
         const label = `Agendado — ${ag.horario} ${!diasSemana || diasSemana.length === 0 ? "todos os dias" : DIAS_SEMANA.filter(d => diasSemana.includes(d.valor)).map(d => d.label).join(", ")}`;
         setBackupAgendamentoInfo(label);
         setExecutandoBackup(true);
@@ -363,7 +366,7 @@ export default function Backup() {
     }
   }, [agendamentos, executandoBackup]);
 
-  // Verificar disparo a cada 10s (mais frequente que o polling do servidor)
+  // Verificar disparo a cada 10s
   useEffect(() => {
     verificarDisparo();
     const t = setInterval(verificarDisparo, 10_000);

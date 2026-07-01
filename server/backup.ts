@@ -3,10 +3,11 @@
  * Gera backup SQL completo + CSVs por tabela e envia por email
  */
 import { Pool } from "pg";
-import * as nodemailer from "nodemailer";
-// archiver é carregado via require() para garantir compatibilidade CJS em produção
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const archiverLib = require("archiver") as typeof import("archiver");
+const nodemailer = require("nodemailer");
+// archiver v8 usa ZipArchive diretamente
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { ZipArchive } = require("archiver");
 import { PassThrough } from "stream";
 import { ENV } from "./_core/env";
 
@@ -191,7 +192,7 @@ async function criarZip(
     passthrough.on("end", () => resolve(Buffer.concat(chunks)));
     passthrough.on("error", reject);
 
-    const archive = archiverLib("zip", { zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 9 } });
 
     archive.on("error", reject);
     archive.pipe(passthrough);

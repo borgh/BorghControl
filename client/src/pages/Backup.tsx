@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Database, Mail, Clock, Calendar, Play, Plus, Trash2, Edit2,
   CheckCircle2, XCircle, Loader2, AlertTriangle, RefreshCw,
-  FileText, FileSpreadsheet, Archive, Shield, Zap
+  FileText, FileSpreadsheet, Archive, Shield, Zap, Timer
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,6 @@ const DIAS_SEMANA = [
   { valor: 6, label: "Sáb" },
 ];
 
-// Etapas do backup com ícone e descrição
 const ETAPAS = [
   { id: "conectando", label: "Conectando ao banco", icon: Database, pct: 8 },
   { id: "sql", label: "Gerando dump SQL", icon: FileText, pct: 35 },
@@ -54,6 +53,40 @@ function formatarTamanho(bytes: number | null | undefined): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// Calcular próxima execução no FRONTEND usando horário local do browser
+function calcularProximaExecucaoLocal(diasSemana: number[] | null, horario: string): Date {
+  const [hh, mm] = horario.split(":").map(Number);
+  const agora = new Date();
+  const candidato = new Date(agora);
+  candidato.setHours(hh, mm, 0, 0);
+
+  if (!diasSemana || diasSemana.length === 0) {
+    if (candidato <= agora) candidato.setDate(candidato.getDate() + 1);
+    return candidato;
+  }
+  for (let i = 0; i <= 7; i++) {
+    const d = new Date(agora);
+    d.setDate(d.getDate() + i);
+    d.setHours(hh, mm, 0, 0);
+    if (diasSemana.includes(d.getDay()) && d > agora) return d;
+  }
+  candidato.setDate(candidato.getDate() + 1);
+  return candidato;
+}
+
+// Formatar countdown legível
+function formatarCountdown(ms: number): string {
+  if (ms <= 0) return "Agora";
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `em ${d}d ${h % 24}h`;
+  if (h > 0) return `em ${h}h ${m % 60}min`;
+  if (m > 0) return `em ${m}min ${s % 60}s`;
+  return `em ${s}s`;
+}
+
 function StatusBadge({ status }: { status: string }) {
   if (status === "sucesso") return (
     <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 gap-1.5">
@@ -72,8 +105,14 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ── Componente de progresso animado ──────────────────────────────────────────
-function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: string) => void }) {
+// ── Painel de progresso animado ───────────────────────────────────────────────
+function BackupProgressPanel({
+  onDone,
+  agendamentoInfo,
+}: {
+  onDone: (success: boolean, msg: string) => void;
+  agendamentoInfo?: string; // ex: "Agendado — 22:00 todos os dias"
+}) {
   const [etapaIdx, setEtapaIdx] = useState(0);
   const [progresso, setProgresso] = useState(0);
   const [concluido, setConcluido] = useState(false);
@@ -83,46 +122,33 @@ function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: strin
 
   const executarMut = trpc.backup.executarManual.useMutation({
     onSuccess: (res) => {
-      // Avançar para concluído
       setEtapaIdx(ETAPAS.length - 1);
       setProgresso(100);
       setConcluido(true);
       if (timerRef.current) clearInterval(timerRef.current);
-      setTimeout(() => onDone(res.sucesso, res.mensagem), 1200);
+      setTimeout(() => onDone(res.sucesso, res.mensagem), 1400);
     },
     onError: (e) => {
       setErro(e.message);
       if (timerRef.current) clearInterval(timerRef.current);
-      setTimeout(() => onDone(false, e.message), 1500);
+      setTimeout(() => onDone(false, e.message), 1800);
     },
   });
 
   useEffect(() => {
-    // Iniciar o backup imediatamente
     executarMut.mutate({ emailDestino: "borghborges@gmail.com", incluirSql: true, incluirCsv: true });
 
-    // Simular progresso nas etapas (o backend é síncrono, então simulamos)
     let idx = 0;
     timerRef.current = setInterval(() => {
       idx++;
-      if (idx < ETAPAS.length - 1) {
-        setEtapaIdx(idx);
-        // Animar o progresso suavemente até o pct da próxima etapa
-        const targetPct = ETAPAS[idx].pct;
-        setProgresso(prev => {
-          if (prev < targetPct) return Math.min(prev + 3, targetPct);
-          return prev;
-        });
-      }
-    }, 800);
+      if (idx < ETAPAS.length - 1) setEtapaIdx(idx);
+    }, 900);
 
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Animar barra de progresso suavemente
+  // Animar barra suavemente
   useEffect(() => {
     const target = etapaAtual.pct;
     const step = setInterval(() => {
@@ -130,7 +156,7 @@ function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: strin
         if (prev >= target) { clearInterval(step); return prev; }
         return Math.min(prev + 1, target);
       });
-    }, 20);
+    }, 18);
     return () => clearInterval(step);
   }, [etapaAtual.pct]);
 
@@ -144,6 +170,12 @@ function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: strin
       "border-primary/30 bg-primary/5"
     )}>
       <CardContent className="p-6 space-y-5">
+        {agendamentoInfo && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground border-b pb-3">
+            <Timer className="h-3.5 w-3.5 text-primary" />
+            <span>{agendamentoInfo}</span>
+          </div>
+        )}
         {/* Ícone + título */}
         <div className="flex items-center gap-3">
           <div className={cn(
@@ -177,18 +209,16 @@ function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: strin
         </div>
 
         {/* Barra de progresso */}
-        <div className="space-y-1.5">
-          <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
-            <div
-              className={cn(
-                "h-full rounded-full transition-all duration-300 ease-out",
-                erro ? "bg-red-500" :
-                concluido ? "bg-emerald-500" :
-                "bg-gradient-to-r from-primary to-primary/80"
-              )}
-              style={{ width: `${progresso}%` }}
-            />
-          </div>
+        <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+          <div
+            className={cn(
+              "h-full rounded-full transition-all duration-300 ease-out",
+              erro ? "bg-red-500" :
+              concluido ? "bg-emerald-500" :
+              "bg-gradient-to-r from-primary to-primary/80"
+            )}
+            style={{ width: `${progresso}%` }}
+          />
         </div>
 
         {/* Etapas */}
@@ -257,9 +287,19 @@ export default function Backup() {
 
   const utils = trpc.useUtils();
 
-  const { data: agendamentos = [], isLoading: loadingAg } = trpc.backup.listarAgendamentos.useQuery();
-  const { data: logs = [], isLoading: loadingLogs } = trpc.backup.listarLogs.useQuery({ limit: 50 });
-  const { data: smtpStatus } = trpc.backup.statusSmtp.useQuery();
+  // Polling: refetch agendamentos e logs a cada 30s
+  const { data: agendamentos = [], isLoading: loadingAg } = trpc.backup.listarAgendamentos.useQuery(
+    undefined,
+    { refetchInterval: 30_000 }
+  );
+  const { data: logs = [], isLoading: loadingLogs } = trpc.backup.listarLogs.useQuery(
+    { limit: 50 },
+    { refetchInterval: 30_000 }
+  );
+  const { data: smtpStatus } = trpc.backup.statusSmtp.useQuery(
+    undefined,
+    { refetchInterval: 60_000 }
+  );
 
   const salvarMut = trpc.backup.salvarAgendamento.useMutation({
     onSuccess: () => {
@@ -284,6 +324,57 @@ export default function Backup() {
   const [confirmarDeletar, setConfirmarDeletar] = useState<number | null>(null);
   const [todosOsDias, setTodosOsDias] = useState(true);
   const [executandoBackup, setExecutandoBackup] = useState(false);
+  const [backupAgendamentoInfo, setBackupAgendamentoInfo] = useState<string | undefined>();
+
+  // Countdown em tempo real: recalcular a cada segundo
+  const [agora, setAgora] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  // Rastrear quais agendamentos já foram disparados nesta sessão
+  const disparadosRef = useRef<Set<number>>(new Set());
+
+  // Verificar se algum agendamento deve disparar agora
+  const verificarDisparo = useCallback(() => {
+    if (executandoBackup) return;
+    for (const ag of agendamentos) {
+      if (!ag.ativo) continue;
+      if (disparadosRef.current.has(ag.id)) continue;
+
+      const [hh, mm] = (ag.horario as string).split(":").map(Number);
+      const now = new Date();
+      const horaLocal = now.getHours();
+      const minLocal = now.getMinutes();
+
+      const diasSemana = ag.diasSemana as number[] | null;
+      const diaOk = !diasSemana || diasSemana.length === 0 || diasSemana.includes(now.getDay());
+
+      if (horaLocal === hh && minLocal === mm && diaOk) {
+        // Marcar como disparado para não repetir no mesmo minuto
+        disparadosRef.current.add(ag.id);
+        const label = `Agendado — ${ag.horario} ${!diasSemana || diasSemana.length === 0 ? "todos os dias" : DIAS_SEMANA.filter(d => diasSemana.includes(d.valor)).map(d => d.label).join(", ")}`;
+        setBackupAgendamentoInfo(label);
+        setExecutandoBackup(true);
+        toast.info(`⏰ Executando backup agendado das ${ag.horario}…`);
+        break;
+      }
+    }
+  }, [agendamentos, executandoBackup]);
+
+  // Verificar disparo a cada 10s (mais frequente que o polling do servidor)
+  useEffect(() => {
+    verificarDisparo();
+    const t = setInterval(verificarDisparo, 10_000);
+    return () => clearInterval(t);
+  }, [verificarDisparo]);
+
+  // Limpar disparados a cada hora (para não acumular)
+  useEffect(() => {
+    const t = setInterval(() => { disparadosRef.current.clear(); }, 60 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
 
   function abrirNovo() {
     setForm(FORM_VAZIO);
@@ -322,6 +413,7 @@ export default function Backup() {
 
   function handleBackupDone(success: boolean, msg: string) {
     setExecutandoBackup(false);
+    setBackupAgendamentoInfo(undefined);
     if (success) {
       toast.success(msg);
     } else {
@@ -330,7 +422,6 @@ export default function Backup() {
     utils.backup.listarLogs.invalidate();
   }
 
-  // Provider label
   const providerLabel = smtpStatus?.provider === "Resend"
     ? "Resend API (HTTPS)"
     : smtpStatus?.host
@@ -351,7 +442,7 @@ export default function Backup() {
           </p>
         </div>
         <Button
-          onClick={() => setExecutandoBackup(true)}
+          onClick={() => { setBackupAgendamentoInfo(undefined); setExecutandoBackup(true); }}
           disabled={executandoBackup}
           className="gap-2 shrink-0"
         >
@@ -364,7 +455,7 @@ export default function Backup() {
 
       {/* Painel de progresso animado */}
       {executandoBackup && (
-        <BackupProgressPanel onDone={handleBackupDone} />
+        <BackupProgressPanel onDone={handleBackupDone} agendamentoInfo={backupAgendamentoInfo} />
       )}
 
       {/* Status de email */}
@@ -388,11 +479,6 @@ export default function Backup() {
               <p className="text-xs text-emerald-700 mt-0.5 flex items-center gap-1">
                 <Zap className="h-3 w-3" />
                 Usando Resend API — envio confiável via HTTPS, sem bloqueio de porta SMTP
-              </p>
-            )}
-            {!smtpStatus?.configurado && (
-              <p className="text-xs text-amber-700 mt-0.5">
-                Configure RESEND_API_KEY no servidor para habilitar envio de emails
               </p>
             )}
           </div>
@@ -443,93 +529,119 @@ export default function Backup() {
             </Card>
           ) : (
             <div className="space-y-3">
-              {agendamentos.map((ag: any) => (
-                <Card key={ag.id} className={cn("transition-all", !ag.ativo && "opacity-60")}>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-4">
-                      <div className="pt-0.5">
-                        <Switch
-                          checked={ag.ativo}
-                          onCheckedChange={(v) => {
-                            salvarMut.mutate({
-                              id: ag.id,
-                              ativo: v,
-                              diasSemana: ag.diasSemana,
-                              horario: ag.horario,
-                              emailDestino: ag.email_destino,
-                              incluirSql: ag.incluir_sql,
-                              incluirCsv: ag.incluir_csv,
-                            });
-                          }}
-                        />
-                      </div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-                            <Clock className="h-3.5 w-3.5 text-primary" />
-                            {ag.horario}
-                          </span>
-                          <span className="text-xs text-muted-foreground">—</span>
-                          {!ag.diasSemana || ag.diasSemana.length === 0 ? (
-                            <Badge variant="secondary" className="text-xs">Todos os dias</Badge>
-                          ) : (
-                            <div className="flex gap-1">
-                              {DIAS_SEMANA.map(d => (
-                                <Badge
-                                  key={d.valor}
-                                  variant={ag.diasSemana.includes(d.valor) ? "default" : "outline"}
-                                  className="text-xs px-1.5 py-0"
-                                >
-                                  {d.label}
-                                </Badge>
-                              ))}
+              {agendamentos.map((ag: any) => {
+                // Calcular próxima execução no frontend com horário local
+                const diasSemana = ag.diasSemana as number[] | null;
+                const proxima = calcularProximaExecucaoLocal(diasSemana, ag.horario as string);
+                const msAte = proxima.getTime() - agora.getTime();
+                const countdown = formatarCountdown(msAte);
+                const iminente = msAte > 0 && msAte < 5 * 60 * 1000; // menos de 5min
+
+                return (
+                  <Card key={ag.id} className={cn(
+                    "transition-all",
+                    !ag.ativo && "opacity-60",
+                    iminente && "border-amber-300 bg-amber-50/30"
+                  )}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="pt-0.5">
+                          <Switch
+                            checked={ag.ativo}
+                            onCheckedChange={(v) => {
+                              salvarMut.mutate({
+                                id: ag.id,
+                                ativo: v,
+                                diasSemana: ag.diasSemana,
+                                horario: ag.horario,
+                                emailDestino: ag.email_destino,
+                                incluirSql: ag.incluir_sql,
+                                incluirCsv: ag.incluir_csv,
+                              });
+                            }}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                              <Clock className="h-3.5 w-3.5 text-primary" />
+                              {ag.horario}
+                            </span>
+                            <span className="text-xs text-muted-foreground">—</span>
+                            {!diasSemana || diasSemana.length === 0 ? (
+                              <Badge variant="secondary" className="text-xs">Todos os dias</Badge>
+                            ) : (
+                              <div className="flex gap-1">
+                                {DIAS_SEMANA.map(d => (
+                                  <Badge
+                                    key={d.valor}
+                                    variant={diasSemana.includes(d.valor) ? "default" : "outline"}
+                                    className="text-xs px-1.5 py-0"
+                                  >
+                                    {d.label}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Mail className="h-3 w-3" />
+                              {ag.email_destino}
+                            </span>
+                            {ag.incluir_sql && (
+                              <span className="flex items-center gap-1">
+                                <FileText className="h-3 w-3" /> SQL
+                              </span>
+                            )}
+                            {ag.incluir_csv && (
+                              <span className="flex items-center gap-1">
+                                <FileSpreadsheet className="h-3 w-3" /> CSV
+                              </span>
+                            )}
+                          </div>
+                          {ag.ativo && (
+                            <div className={cn(
+                              "flex items-center gap-1.5 text-xs",
+                              iminente ? "text-amber-600 font-medium" : "text-muted-foreground/70"
+                            )}>
+                              <Timer className={cn("h-3 w-3", iminente && "animate-pulse")} />
+                              <span>
+                                Próxima execução: {proxima.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}
+                                {" "}
+                                <span className={cn(
+                                  "tabular-nums",
+                                  iminente ? "text-amber-700 font-semibold" : "text-muted-foreground/50"
+                                )}>
+                                  ({countdown})
+                                </span>
+                              </span>
                             </div>
                           )}
                         </div>
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" />
-                            {ag.email_destino}
-                          </span>
-                          {ag.incluir_sql && (
-                            <span className="flex items-center gap-1">
-                              <FileText className="h-3 w-3" /> SQL
-                            </span>
-                          )}
-                          {ag.incluir_csv && (
-                            <span className="flex items-center gap-1">
-                              <FileSpreadsheet className="h-3 w-3" /> CSV
-                            </span>
-                          )}
+                        <div className="flex gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            onClick={() => abrirEditar(ag)}
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => setConfirmarDeletar(ag.id)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
-                        {ag.proximaExecucao && (
-                          <p className="text-xs text-muted-foreground/70">
-                            Próxima execução: {formatarData(ag.proximaExecucao)}
-                          </p>
-                        )}
                       </div>
-                      <div className="flex gap-1 shrink-0">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                          onClick={() => abrirEditar(ag)}
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => setConfirmarDeletar(ag.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
           )}
         </TabsContent>
@@ -639,7 +751,7 @@ export default function Backup() {
 
           <div className="space-y-5 py-2">
             <div className="space-y-1.5">
-              <Label htmlFor="horario">Horário do backup</Label>
+              <Label htmlFor="horario">Horário do backup (horário de Brasília)</Label>
               <Input
                 id="horario"
                 type="time"

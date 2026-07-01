@@ -51,8 +51,11 @@ async function verificarEExecutarAgendamentos(): Promise<void> {
     );
 
     const agora = new Date();
-    const horaAtual = `${String(agora.getHours()).padStart(2, "0")}:${String(agora.getMinutes()).padStart(2, "0")}`;
-    const diaAtual = agora.getDay(); // 0=Dom, 1=Seg, ...
+    // Horários são armazenados em horário de Brasília (UTC-3)
+    // Converter hora atual UTC para BRT antes de comparar
+    const agoraBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+    const horaAtual = `${String(agoraBRT.getUTCHours()).padStart(2, "0")}:${String(agoraBRT.getUTCMinutes()).padStart(2, "0")}`;
+    const diaAtual = agoraBRT.getUTCDay(); // 0=Dom, 1=Seg, ... em BRT
 
     for (const ag of res.rows) {
       if (ag.horario !== horaAtual) continue;

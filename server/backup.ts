@@ -213,45 +213,73 @@ async function criarZip(
   });
 }
 
-// ─── Enviar email com backup ──────────────────────────────────────────────────
+// ─── Enviar email com backup via Resend API (HTTP) ───────────────────────────
 async function enviarEmail(
   emailDestino: string,
   zipBuffer: Buffer,
   dataStr: string,
   resumo: string
 ): Promise<boolean> {
-  if (!ENV.smtpHost || !ENV.smtpUser || !ENV.smtpPass) {
-    console.warn("[Backup] SMTP não configurado — email não enviado.");
+  if (!ENV.resendApiKey) {
+    console.warn("[Backup] RESEND_API_KEY não configurada — email não enviado.");
     return false;
   }
 
-  const transporter = nodemailer.createTransport({
-    host: ENV.smtpHost,
-    port: ENV.smtpPort,
-    secure: ENV.smtpPort === 465,
-    auth: { user: ENV.smtpUser, pass: ENV.smtpPass },
-    tls: { rejectUnauthorized: false },
-  });
+  // Resend aceita anexos como base64 via API REST (sem precisar de porta SMTP)
+  const zipBase64 = zipBuffer.toString("base64");
+  const filename = `borghcontrol_backup_${dataStr}.zip`;
 
-  await transporter.sendMail({
-    from: `"BorghControl Backup" <${ENV.smtpFrom}>`,
-    to: emailDestino,
+  const body = JSON.stringify({
+    from: "BorghControl Backup <onboarding@resend.dev>",
+    to: [emailDestino],
     subject: `[BorghControl] Backup do banco de dados — ${dataStr}`,
     html: `
-      <h2>Backup BorghControl</h2>
-      <p>O backup automático foi gerado com sucesso em <strong>${dataStr}</strong>.</p>
-      <pre style="background:#f5f5f5;padding:12px;border-radius:6px;">${resumo}</pre>
-      <p>Os arquivos estão anexados neste email.</p>
-      <hr>
-      <small>BorghControl — Sistema de Controle Financeiro</small>
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="color:#16a34a">✅ Backup BorghControl</h2>
+        <p>O backup foi gerado com sucesso em <strong>${dataStr}</strong>.</p>
+        <pre style="background:#f5f5f5;padding:12px;border-radius:6px;font-size:13px">${resumo}</pre>
+        <p>O arquivo ZIP com o dump SQL e todos os CSVs está anexado neste email.</p>
+        <hr style="border:none;border-top:1px solid #e5e7eb">
+        <small style="color:#6b7280">BorghControl — Sistema de Controle Financeiro</small>
+      </div>
     `,
     attachments: [
       {
-        filename: `borghcontrol_backup_${dataStr}.zip`,
-        content: zipBuffer,
-        contentType: "application/zip",
+        filename,
+        content: zipBase64,
       },
     ],
+  });
+
+  const https = require("https") as typeof import("https");
+  await new Promise<void>((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: "api.resend.com",
+        path: "/emails",
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${ENV.resendApiKey}`,
+          "Content-Length": Buffer.byteLength(body),
+        },
+      },
+      (res) => {
+        let data = "";
+        res.on("data", (chunk) => (data += chunk));
+        res.on("end", () => {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            console.log("[Backup] Email enviado via Resend:", data);
+            resolve();
+          } else {
+            reject(new Error(`Resend API error ${res.statusCode}: ${data}`));
+          }
+        });
+      }
+    );
+    req.on("error", reject);
+    req.write(body);
+    req.end();
   });
 
   return true;
@@ -356,29 +384,34 @@ export function calcularProximaExecucao(
   horario: string
 ): Date {
   const [hh, mm] = horario.split(":").map(Number);
+  // Horários são em BRT (UTC-3). Calcular "agora" em BRT para comparar corretamente.
   const agora = new Date();
-  const candidato = new Date(agora);
-  candidato.setHours(hh, mm, 0, 0);
+  const agoraBRT = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
+
+  // Construir candidato no mesmo dia em BRT
+  const candidatoBRT = new Date(agoraBRT);
+  candidatoBRT.setUTCHours(hh, mm, 0, 0);
 
   if (diasSemana === null || diasSemana.length === 0) {
     // Todos os dias
-    if (candidato <= agora) {
-      candidato.setDate(candidato.getDate() + 1);
+    if (candidatoBRT <= agoraBRT) {
+      candidatoBRT.setUTCDate(candidatoBRT.getUTCDate() + 1);
     }
-    return candidato;
+    // Converter de volta para UTC real para retornar como Date
+    return new Date(candidatoBRT.getTime() + 3 * 60 * 60 * 1000);
   }
 
   // Encontrar o próximo dia da semana válido
   for (let i = 0; i <= 7; i++) {
-    const d = new Date(agora);
-    d.setDate(d.getDate() + i);
-    d.setHours(hh, mm, 0, 0);
-    if (diasSemana.includes(d.getDay()) && d > agora) {
-      return d;
+    const d = new Date(agoraBRT);
+    d.setUTCDate(d.getUTCDate() + i);
+    d.setUTCHours(hh, mm, 0, 0);
+    if (diasSemana.includes(d.getUTCDay()) && d > agoraBRT) {
+      return new Date(d.getTime() + 3 * 60 * 60 * 1000);
     }
   }
 
   // Fallback: amanhã
-  candidato.setDate(candidato.getDate() + 1);
-  return candidato;
+  candidatoBRT.setUTCDate(candidatoBRT.getUTCDate() + 1);
+  return new Date(candidatoBRT.getTime() + 3 * 60 * 60 * 1000);
 }

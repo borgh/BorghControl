@@ -199,6 +199,33 @@ export async function initDatabase(): Promise<void> {
       // Migrations de colunas adicionadas após criação inicial das tabelas
       await client.query(`
         ALTER TABLE IF EXISTS projetos ADD COLUMN IF NOT EXISTS imagem_fit VARCHAR(20) DEFAULT 'cover';
+
+        -- Tabelas de backup
+        CREATE TABLE IF NOT EXISTS backup_agendamentos (
+          id SERIAL PRIMARY KEY,
+          ativo BOOLEAN NOT NULL DEFAULT true,
+          dias_semana TEXT,
+          horario VARCHAR(5) NOT NULL DEFAULT '02:00',
+          email_destino VARCHAR(255) NOT NULL DEFAULT 'borgh@smfusion.com.br',
+          incluir_sql BOOLEAN NOT NULL DEFAULT true,
+          incluir_csv BOOLEAN NOT NULL DEFAULT true,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS backup_logs (
+          id SERIAL PRIMARY KEY,
+          agendamento_id INTEGER,
+          status VARCHAR(20) NOT NULL,
+          tipo VARCHAR(20) NOT NULL DEFAULT 'agendado',
+          mensagem TEXT,
+          detalhes TEXT,
+          tamanho_sql INTEGER,
+          total_csvs INTEGER,
+          email_enviado BOOLEAN DEFAULT false,
+          iniciado_em TIMESTAMP NOT NULL DEFAULT NOW(),
+          finalizado_em TIMESTAMP
+        );
       `);
 
       // Seed categorias

@@ -8,7 +8,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
   Menu, LogOut, ChevronRight, DollarSign, X, Settings,
-  FolderOpen, Users, PieChart, FileText, ChevronDown
+  FolderOpen, Users, PieChart, FileText, ChevronDown, Database
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -165,6 +165,13 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
                 >
                   <Settings className="h-4 w-4 text-muted-foreground" />
                   Configurações
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => goTo("/backup")}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                  Backup
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>

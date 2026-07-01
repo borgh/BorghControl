@@ -15,6 +15,7 @@ import Projetos from "./pages/Projetos";
 import Socios from "./pages/Socios";
 import DashboardProjetos from "./pages/DashboardProjetos";
 import RelatoriosProjetos from "./pages/RelatoriosProjetos";
+import Backup from "./pages/Backup";
 import BorghLayout from "./components/BorghLayout";
 import { useAuth } from "./_core/hooks/useAuth";
 import { Loader2 } from "lucide-react";
@@ -58,6 +59,7 @@ function Router() {
       <Route path="/categorias" component={() => <ProtectedRoute component={Categorias} />} />
       <Route path="/relatorios" component={() => <ProtectedRoute component={Relatorios} />} />
       <Route path="/configuracoes" component={() => <ProtectedRoute component={Configuracoes} />} />
+      <Route path="/backup" component={() => <ProtectedRoute component={Backup} />} />
       <Route path="/projetos" component={() => <ProtectedRoute component={Projetos} />} />
       <Route path="/projetos/socios" component={() => <ProtectedRoute component={Socios} />} />
       <Route path="/projetos/dashboard" component={() => <ProtectedRoute component={DashboardProjetos} />} />

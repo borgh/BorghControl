@@ -20,6 +20,15 @@ import {
   getUserPermissions, saveUserPermissions,
 } from "./db";
 import { TRPCError } from "@trpc/server";
+import { executarBackup, calcularProximaExecucao } from "./backup";
+import { Pool } from "pg";
+import { ENV } from "./_core/env";
+
+function getBackupPool() {
+  const url = ENV.databaseUrl;
+  const isInternal = url.includes(".railway.internal") || url.includes("localhost") || url.includes("127.0.0.1");
+  return new Pool({ connectionString: url, ssl: isInternal ? undefined : { rejectUnauthorized: false }, max: 2 });
+}
 
 export const appRouter = router({
   system: systemRouter,
@@ -357,6 +366,108 @@ export const appRouter = router({
       .input(z.object({ dias: z.number().default(7) }).optional())
       .query(async ({ input }) => getProximosVencimentos(input?.dias ?? 7)),
     anosDisponiveis: publicProcedure.query(async () => getAnosDisponiveis()),
+  }),
+  backup: router({
+    // Listar agendamentos
+    listarAgendamentos: protectedProcedure.query(async () => {
+      const pool = getBackupPool();
+      const client = await pool.connect();
+      try {
+        const res = await client.query(`SELECT * FROM backup_agendamentos ORDER BY id`);
+        return res.rows.map((ag: any) => ({
+          ...ag,
+          diasSemana: ag.dias_semana ? JSON.parse(ag.dias_semana) : null,
+          proximaExecucao: calcularProximaExecucao(
+            ag.dias_semana ? JSON.parse(ag.dias_semana) : null,
+            ag.horario
+          ),
+        }));
+      } finally { client.release(); await pool.end(); }
+    }),
+
+    // Criar ou atualizar agendamento
+    salvarAgendamento: protectedProcedure
+      .input(z.object({
+        id: z.number().optional(),
+        ativo: z.boolean().default(true),
+        diasSemana: z.array(z.number().min(0).max(6)).nullable(),
+        horario: z.string().regex(/^\d{2}:\d{2}$/),
+        emailDestino: z.string().email(),
+        incluirSql: z.boolean().default(true),
+        incluirCsv: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        const pool = getBackupPool();
+        const client = await pool.connect();
+        try {
+          const diasJson = input.diasSemana && input.diasSemana.length > 0
+            ? JSON.stringify(input.diasSemana) : null;
+          if (input.id) {
+            await client.query(
+              `UPDATE backup_agendamentos SET ativo=$1, dias_semana=$2, horario=$3, email_destino=$4,
+               incluir_sql=$5, incluir_csv=$6, "updatedAt"=NOW() WHERE id=$7`,
+              [input.ativo, diasJson, input.horario, input.emailDestino, input.incluirSql, input.incluirCsv, input.id]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO backup_agendamentos (ativo, dias_semana, horario, email_destino, incluir_sql, incluir_csv)
+               VALUES ($1,$2,$3,$4,$5,$6)`,
+              [input.ativo, diasJson, input.horario, input.emailDestino, input.incluirSql, input.incluirCsv]
+            );
+          }
+          return { ok: true };
+        } finally { client.release(); await pool.end(); }
+      }),
+
+    // Deletar agendamento
+    deletarAgendamento: protectedProcedure
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => {
+        const pool = getBackupPool();
+        const client = await pool.connect();
+        try {
+          await client.query(`DELETE FROM backup_agendamentos WHERE id=$1`, [input.id]);
+          return { ok: true };
+        } finally { client.release(); await pool.end(); }
+      }),
+
+    // Executar backup manual
+    executarManual: protectedProcedure
+      .input(z.object({
+        emailDestino: z.string().email().default("borgh@smfusion.com.br"),
+        incluirSql: z.boolean().default(true),
+        incluirCsv: z.boolean().default(true),
+      }))
+      .mutation(async ({ input }) => {
+        return executarBackup(null, "manual", input.emailDestino, input.incluirSql, input.incluirCsv);
+      }),
+
+    // Listar logs
+    listarLogs: protectedProcedure
+      .input(z.object({ limit: z.number().default(50) }).optional())
+      .query(async ({ input }) => {
+        const pool = getBackupPool();
+        const client = await pool.connect();
+        try {
+          const res = await client.query(
+            `SELECT bl.*, ba.horario, ba.email_destino
+             FROM backup_logs bl
+             LEFT JOIN backup_agendamentos ba ON ba.id = bl.agendamento_id
+             ORDER BY bl.iniciado_em DESC LIMIT $1`,
+            [input?.limit ?? 50]
+          );
+          return res.rows;
+        } finally { client.release(); await pool.end(); }
+      }),
+
+    // Status SMTP
+    statusSmtp: protectedProcedure.query(async () => {
+      return {
+        configurado: !!(ENV.smtpHost && ENV.smtpUser && ENV.smtpPass),
+        host: ENV.smtpHost || null,
+        from: ENV.smtpFrom,
+      };
+    }),
   }),
 });
 

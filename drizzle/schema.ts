@@ -164,3 +164,34 @@ export const investimentos = pgTable("investimentos", {
 });
 export type Investimento = typeof investimentos.$inferSelect;
 export type InsertInvestimento = typeof investimentos.$inferInsert;
+
+// ─── Backup ───────────────────────────────────────────────────────────────────
+export const backupAgendamentos = pgTable("backup_agendamentos", {
+  id: serial("id").primaryKey(),
+  ativo: boolean("ativo").default(true).notNull(),
+  // Dias da semana: JSON array ex: "[1,2,3,4,5]" ou null para todos os dias
+  diasSemana: text("dias_semana"),
+  horario: varchar("horario", { length: 5 }).default("02:00").notNull(), // HH:MM
+  emailDestino: varchar("email_destino", { length: 255 }).default("borgh@smfusion.com.br").notNull(),
+  incluirSql: boolean("incluir_sql").default(true).notNull(),
+  incluirCsv: boolean("incluir_csv").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type BackupAgendamento = typeof backupAgendamentos.$inferSelect;
+export type InsertBackupAgendamento = typeof backupAgendamentos.$inferInsert;
+
+export const backupLogs = pgTable("backup_logs", {
+  id: serial("id").primaryKey(),
+  agendamentoId: integer("agendamento_id"),
+  status: varchar("status", { length: 20 }).notNull(), // 'sucesso' | 'erro' | 'em_andamento'
+  tipo: varchar("tipo", { length: 20 }).default("agendado").notNull(), // 'agendado' | 'manual'
+  mensagem: text("mensagem"),
+  detalhes: text("detalhes"), // JSON com detalhes do backup
+  tamanhoSql: integer("tamanho_sql"), // bytes
+  totalCsvs: integer("total_csvs"),
+  emailEnviado: boolean("email_enviado").default(false),
+  iniciadoEm: timestamp("iniciado_em").defaultNow().notNull(),
+  finalizadoEm: timestamp("finalizado_em"),
+});
+export type BackupLog = typeof backupLogs.$inferSelect;

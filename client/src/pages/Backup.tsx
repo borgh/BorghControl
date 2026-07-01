@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import {
   Database, Mail, Clock, Calendar, Play, Plus, Trash2, Edit2,
   CheckCircle2, XCircle, Loader2, AlertTriangle, RefreshCw,
-  FileText, FileSpreadsheet, Archive, Shield
+  FileText, FileSpreadsheet, Archive, Shield, Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,16 @@ const DIAS_SEMANA = [
   { valor: 4, label: "Qui" },
   { valor: 5, label: "Sex" },
   { valor: 6, label: "Sáb" },
+];
+
+// Etapas do backup com ícone e descrição
+const ETAPAS = [
+  { id: "conectando", label: "Conectando ao banco", icon: Database, pct: 8 },
+  { id: "sql", label: "Gerando dump SQL", icon: FileText, pct: 35 },
+  { id: "csv", label: "Exportando CSVs", icon: FileSpreadsheet, pct: 65 },
+  { id: "zip", label: "Compactando arquivos", icon: Archive, pct: 82 },
+  { id: "email", label: "Enviando por email", icon: Mail, pct: 95 },
+  { id: "concluido", label: "Backup concluído!", icon: CheckCircle2, pct: 100 },
 ];
 
 function formatarData(d: string | Date | null | undefined): string {
@@ -62,6 +72,161 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ── Componente de progresso animado ──────────────────────────────────────────
+function BackupProgressPanel({ onDone }: { onDone: (success: boolean, msg: string) => void }) {
+  const [etapaIdx, setEtapaIdx] = useState(0);
+  const [progresso, setProgresso] = useState(0);
+  const [concluido, setConcluido] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const etapaAtual = ETAPAS[Math.min(etapaIdx, ETAPAS.length - 1)];
+
+  const executarMut = trpc.backup.executarManual.useMutation({
+    onSuccess: (res) => {
+      // Avançar para concluído
+      setEtapaIdx(ETAPAS.length - 1);
+      setProgresso(100);
+      setConcluido(true);
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTimeout(() => onDone(res.sucesso, res.mensagem), 1200);
+    },
+    onError: (e) => {
+      setErro(e.message);
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTimeout(() => onDone(false, e.message), 1500);
+    },
+  });
+
+  useEffect(() => {
+    // Iniciar o backup imediatamente
+    executarMut.mutate({ emailDestino: "borgh@smfusion.com.br", incluirSql: true, incluirCsv: true });
+
+    // Simular progresso nas etapas (o backend é síncrono, então simulamos)
+    let idx = 0;
+    timerRef.current = setInterval(() => {
+      idx++;
+      if (idx < ETAPAS.length - 1) {
+        setEtapaIdx(idx);
+        // Animar o progresso suavemente até o pct da próxima etapa
+        const targetPct = ETAPAS[idx].pct;
+        setProgresso(prev => {
+          if (prev < targetPct) return Math.min(prev + 3, targetPct);
+          return prev;
+        });
+      }
+    }, 800);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Animar barra de progresso suavemente
+  useEffect(() => {
+    const target = etapaAtual.pct;
+    const step = setInterval(() => {
+      setProgresso(prev => {
+        if (prev >= target) { clearInterval(step); return prev; }
+        return Math.min(prev + 1, target);
+      });
+    }, 20);
+    return () => clearInterval(step);
+  }, [etapaAtual.pct]);
+
+  const IconAtual = erro ? XCircle : etapaAtual.icon;
+
+  return (
+    <Card className={cn(
+      "border-2 overflow-hidden transition-all duration-500",
+      erro ? "border-red-300 bg-red-50/50" :
+      concluido ? "border-emerald-300 bg-emerald-50/50" :
+      "border-primary/30 bg-primary/5"
+    )}>
+      <CardContent className="p-6 space-y-5">
+        {/* Ícone + título */}
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "p-2.5 rounded-xl transition-all duration-300",
+            erro ? "bg-red-100" : concluido ? "bg-emerald-100" : "bg-primary/10"
+          )}>
+            <IconAtual className={cn(
+              "h-5 w-5 transition-all",
+              erro ? "text-red-600" :
+              concluido ? "text-emerald-600" :
+              "text-primary animate-pulse"
+            )} />
+          </div>
+          <div>
+            <p className={cn(
+              "font-semibold text-sm",
+              erro ? "text-red-700" : concluido ? "text-emerald-700" : "text-foreground"
+            )}>
+              {erro ? "Erro no backup" : etapaAtual.label}
+            </p>
+            {erro && <p className="text-xs text-red-600 mt-0.5">{erro}</p>}
+          </div>
+          <div className="ml-auto text-right">
+            <span className={cn(
+              "text-2xl font-bold tabular-nums",
+              erro ? "text-red-600" : concluido ? "text-emerald-600" : "text-primary"
+            )}>
+              {progresso}%
+            </span>
+          </div>
+        </div>
+
+        {/* Barra de progresso */}
+        <div className="space-y-1.5">
+          <div className="h-2.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-300 ease-out",
+                erro ? "bg-red-500" :
+                concluido ? "bg-emerald-500" :
+                "bg-gradient-to-r from-primary to-primary/80"
+              )}
+              style={{ width: `${progresso}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Etapas */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {ETAPAS.map((etapa, i) => {
+            const EtapaIcon = etapa.icon;
+            const ativa = i === etapaIdx && !concluido && !erro;
+            const feita = i < etapaIdx || concluido;
+            return (
+              <div key={etapa.id} className={cn(
+                "flex flex-col items-center gap-1 p-2 rounded-lg text-center transition-all duration-300",
+                ativa ? "bg-primary/10 scale-105" :
+                feita ? "bg-emerald-50" :
+                "opacity-40"
+              )}>
+                <EtapaIcon className={cn(
+                  "h-4 w-4",
+                  ativa ? "text-primary animate-pulse" :
+                  feita ? "text-emerald-600" :
+                  "text-muted-foreground"
+                )} />
+                <span className={cn(
+                  "text-[10px] leading-tight font-medium",
+                  ativa ? "text-primary" :
+                  feita ? "text-emerald-700" :
+                  "text-muted-foreground"
+                )}>
+                  {etapa.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 interface AgendamentoForm {
   id?: number;
   ativo: boolean;
@@ -85,7 +250,6 @@ export default function Backup() {
   const { user } = useAuth();
   const [, navigate] = useLocation();
 
-  // Redirecionar não-admin
   if (user && user.role !== "admin") {
     navigate("/");
     return null;
@@ -93,12 +257,10 @@ export default function Backup() {
 
   const utils = trpc.useUtils();
 
-  // Queries
   const { data: agendamentos = [], isLoading: loadingAg } = trpc.backup.listarAgendamentos.useQuery();
   const { data: logs = [], isLoading: loadingLogs } = trpc.backup.listarLogs.useQuery({ limit: 50 });
   const { data: smtpStatus } = trpc.backup.statusSmtp.useQuery();
 
-  // Mutations
   const salvarMut = trpc.backup.salvarAgendamento.useMutation({
     onSuccess: () => {
       toast.success("Agendamento salvo com sucesso!");
@@ -117,23 +279,11 @@ export default function Backup() {
     onError: (e) => toast.error("Erro ao deletar: " + e.message),
   });
 
-  const executarMut = trpc.backup.executarManual.useMutation({
-    onSuccess: (res) => {
-      if (res.sucesso) {
-        toast.success(res.mensagem);
-      } else {
-        toast.error("Backup falhou: " + res.mensagem);
-      }
-      utils.backup.listarLogs.invalidate();
-    },
-    onError: (e) => toast.error("Erro ao executar backup: " + e.message),
-  });
-
-  // Estado local
   const [dialogAberto, setDialogAberto] = useState(false);
   const [form, setForm] = useState<AgendamentoForm>(FORM_VAZIO);
   const [confirmarDeletar, setConfirmarDeletar] = useState<number | null>(null);
   const [todosOsDias, setTodosOsDias] = useState(true);
+  const [executandoBackup, setExecutandoBackup] = useState(false);
 
   function abrirNovo() {
     setForm(FORM_VAZIO);
@@ -167,11 +317,25 @@ export default function Backup() {
 
   function salvar() {
     const diasFinal = todosOsDias ? null : (form.diasSemana ?? []);
-    salvarMut.mutate({
-      ...form,
-      diasSemana: diasFinal,
-    });
+    salvarMut.mutate({ ...form, diasSemana: diasFinal });
   }
+
+  function handleBackupDone(success: boolean, msg: string) {
+    setExecutandoBackup(false);
+    if (success) {
+      toast.success(msg);
+    } else {
+      toast.error("Backup falhou: " + msg);
+    }
+    utils.backup.listarLogs.invalidate();
+  }
+
+  // Provider label
+  const providerLabel = smtpStatus?.provider === "Resend"
+    ? "Resend API (HTTPS)"
+    : smtpStatus?.host
+    ? `SMTP via ${smtpStatus.host}`
+    : null;
 
   return (
     <div className="space-y-6">
@@ -187,16 +351,23 @@ export default function Backup() {
           </p>
         </div>
         <Button
-          onClick={() => executarMut.mutate({ emailDestino: "borgh@smfusion.com.br", incluirSql: true, incluirCsv: true })}
-          disabled={executarMut.isPending}
+          onClick={() => setExecutandoBackup(true)}
+          disabled={executandoBackup}
           className="gap-2 shrink-0"
         >
-          {executarMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          {executandoBackup
+            ? <Loader2 className="h-4 w-4 animate-spin" />
+            : <Play className="h-4 w-4" />}
           Executar Backup Agora
         </Button>
       </div>
 
-      {/* Status SMTP */}
+      {/* Painel de progresso animado */}
+      {executandoBackup && (
+        <BackupProgressPanel onDone={handleBackupDone} />
+      )}
+
+      {/* Status de email */}
       <Card className={cn(
         "border",
         smtpStatus?.configurado ? "border-emerald-200 bg-emerald-50/50" : "border-amber-200 bg-amber-50/50"
@@ -210,12 +381,18 @@ export default function Backup() {
           <div className="flex-1 min-w-0">
             <p className={cn("text-sm font-medium", smtpStatus?.configurado ? "text-emerald-800" : "text-amber-800")}>
               {smtpStatus?.configurado
-                ? `SMTP configurado — envios via ${smtpStatus.host}`
-                : "SMTP não configurado — backups serão gerados mas não enviados por email"}
+                ? `Email configurado — envios via ${providerLabel}`
+                : "Email não configurado — backups serão gerados mas não enviados"}
             </p>
+            {smtpStatus?.configurado && smtpStatus.provider === "Resend" && (
+              <p className="text-xs text-emerald-700 mt-0.5 flex items-center gap-1">
+                <Zap className="h-3 w-3" />
+                Usando Resend API — envio confiável via HTTPS, sem bloqueio de porta SMTP
+              </p>
+            )}
             {!smtpStatus?.configurado && (
               <p className="text-xs text-amber-700 mt-0.5">
-                Configure as variáveis de ambiente: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS no servidor
+                Configure RESEND_API_KEY no servidor para habilitar envio de emails
               </p>
             )}
           </div>
@@ -270,7 +447,6 @@ export default function Backup() {
                 <Card key={ag.id} className={cn("transition-all", !ag.ativo && "opacity-60")}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
-                      {/* Toggle ativo */}
                       <div className="pt-0.5">
                         <Switch
                           checked={ag.ativo}
@@ -287,8 +463,6 @@ export default function Backup() {
                           }}
                         />
                       </div>
-
-                      {/* Info */}
                       <div className="flex-1 min-w-0 space-y-2">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-sm font-semibold text-foreground flex items-center gap-1.5">
@@ -312,7 +486,6 @@ export default function Backup() {
                             </div>
                           )}
                         </div>
-
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Mail className="h-3 w-3" />
@@ -329,15 +502,12 @@ export default function Backup() {
                             </span>
                           )}
                         </div>
-
                         {ag.proximaExecucao && (
                           <p className="text-xs text-muted-foreground/70">
                             Próxima execução: {formatarData(ag.proximaExecucao)}
                           </p>
                         )}
                       </div>
-
-                      {/* Ações */}
                       <div className="flex gap-1 shrink-0">
                         <Button
                           variant="ghost"
@@ -412,9 +582,7 @@ export default function Backup() {
                             </Badge>
                           )}
                         </div>
-
                         <p className="text-sm text-foreground">{log.mensagem || "—"}</p>
-
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                           <span className="flex items-center gap-1">
                             <Clock className="h-3 w-3" />
@@ -439,7 +607,6 @@ export default function Backup() {
                             </span>
                           )}
                         </div>
-
                         {log.detalhes && (
                           <details className="mt-1">
                             <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground">
@@ -471,7 +638,6 @@ export default function Backup() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
-            {/* Horário */}
             <div className="space-y-1.5">
               <Label htmlFor="horario">Horário do backup</Label>
               <Input
@@ -482,7 +648,6 @@ export default function Backup() {
               />
             </div>
 
-            {/* Email destino */}
             <div className="space-y-1.5">
               <Label htmlFor="email">Email de destino</Label>
               <Input
@@ -494,7 +659,6 @@ export default function Backup() {
               />
             </div>
 
-            {/* Dias da semana */}
             <div className="space-y-2">
               <Label>Dias da semana</Label>
               <div className="flex items-center gap-2">
@@ -529,7 +693,6 @@ export default function Backup() {
               )}
             </div>
 
-            {/* Tipos de backup */}
             <div className="space-y-2">
               <Label>Conteúdo do backup</Label>
               <div className="space-y-2">
@@ -558,7 +721,6 @@ export default function Backup() {
               </div>
             </div>
 
-            {/* Ativo */}
             <div className="flex items-center gap-3">
               <Switch
                 id="ativo"

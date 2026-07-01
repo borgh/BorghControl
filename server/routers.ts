@@ -462,10 +462,13 @@ export const appRouter = router({
 
     // Status SMTP
     statusSmtp: protectedProcedure.query(async () => {
+      const usandoResend = !!ENV.resendApiKey;
+      const usandoSmtp = !!(ENV.smtpHost && ENV.smtpUser && ENV.smtpPass);
       return {
-        configurado: !!(ENV.smtpHost && ENV.smtpUser && ENV.smtpPass),
-        host: ENV.smtpHost || null,
+        configurado: usandoResend || usandoSmtp,
+        host: usandoResend ? "api.resend.com" : (ENV.smtpHost || null),
         from: ENV.smtpFrom,
+        provider: usandoResend ? "Resend" : (usandoSmtp ? "SMTP" : null),
       };
     }),
   }),

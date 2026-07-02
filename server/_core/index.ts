@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite.prod";
 import { initDatabase } from "../initDb";
 import { iniciarCronBackup } from "../backup-cron";
+import { registerUploadProjetoRoutes } from "../upload-projeto";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -40,6 +41,8 @@ async function startServer() {
   // Iniciar cron de backup
   await iniciarCronBackup();
   registerStorageProxy(app);
+  // Rotas de upload e serviço de imagens de projetos
+  registerUploadProjetoRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

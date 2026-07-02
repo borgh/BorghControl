@@ -2,9 +2,28 @@ import type { Express } from "express";
 import multer from "multer";
 import { Pool } from "pg";
 
+// Pool compartilhado — reutilizado entre requisições
+let _pool: Pool | null = null;
+function getPool(): Pool {
+  if (!_pool) {
+    const url = process.env.DATABASE_URL!;
+    const isInternalHost =
+      url.includes(".railway.internal") ||
+      url.includes("localhost") ||
+      url.includes("127.0.0.1");
+    const ssl = isInternalHost ? undefined : { rejectUnauthorized: false };
+    _pool = new Pool({ connectionString: url, ssl, max: 5 });
+  }
+  return _pool;
+}
+
+// Cache em memória: { id -> { buffer, mime, etag, ts } }
+const imageCache = new Map<number, { buffer: Buffer; mime: string; etag: string; ts: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
     if (allowed.includes(file.mimetype)) {
@@ -15,20 +34,24 @@ const upload = multer({
   },
 });
 
-function getPool() {
-  const url = process.env.DATABASE_URL!;
-  const isInternalHost =
-    url.includes(".railway.internal") ||
-    url.includes("localhost") ||
-    url.includes("127.0.0.1");
-  const ssl = isInternalHost ? undefined : { rejectUnauthorized: false };
-  return new Pool({ connectionString: url, ssl });
+async function comprimirImagem(buffer: Buffer, _mime: string): Promise<{ buffer: Buffer; mime: string }> {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sharp = require("sharp");
+    const compressed = await sharp(buffer)
+      .resize({ width: 800, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+    console.log(`[UploadProjeto] Comprimido: ${buffer.length} → ${compressed.length} bytes (WebP)`);
+    return { buffer: compressed, mime: "image/webp" };
+  } catch (err: any) {
+    console.warn("[UploadProjeto] sharp indisponível, salvando original:", err?.message);
+    return { buffer, mime: _mime };
+  }
 }
 
 export function registerUploadProjetoRoutes(app: Express) {
   // POST /api/projetos/upload-imagem
-  // Se projetoId for enviado no body, atualiza a imagem do projeto existente.
-  // Caso contrário, retorna os dados em base64 para ser salvo junto com o projeto.
   app.post("/api/projetos/upload-imagem", upload.single("imagem"), async (req, res) => {
     try {
       if (!req.file) {
@@ -38,28 +61,24 @@ export function registerUploadProjetoRoutes(app: Express) {
       const { buffer, mimetype } = req.file;
       const projetoId = req.body.projetoId ? parseInt(req.body.projetoId, 10) : null;
 
+      const { buffer: compBuffer, mime: compMime } = await comprimirImagem(buffer, mimetype);
+
       if (projetoId && !isNaN(projetoId)) {
-        // Atualiza a imagem de um projeto existente diretamente no banco
         const pool = getPool();
-        const client = await pool.connect();
-        try {
-          await client.query(
-            `UPDATE projetos SET imagem_dados = $1, imagem_mime = $2, "updatedAt" = now() WHERE id = $3`,
-            [buffer, mimetype, projetoId]
-          );
-          res.json({ success: true, url: `/api/projetos/imagem/${projetoId}` });
-        } finally {
-          client.release();
-          await pool.end();
-        }
+        await pool.query(
+          `UPDATE projetos SET imagem_dados = $1, imagem_mime = $2, "updatedAt" = now() WHERE id = $3`,
+          [compBuffer, compMime, projetoId]
+        );
+        // Invalidar cache para este projeto
+        imageCache.delete(projetoId);
+        res.json({ success: true, url: `/api/projetos/imagem/${projetoId}` });
       } else {
-        // Retorna os dados em base64 para ser salvo junto com o projeto na criação
-        const base64 = buffer.toString("base64");
+        const base64 = compBuffer.toString("base64");
         res.json({
           success: true,
           data: base64,
-          mime: mimetype,
-          url: `data:${mimetype};base64,${base64}`,
+          mime: compMime,
+          url: `data:${compMime};base64,${base64}`,
         });
       }
     } catch (err: any) {
@@ -67,14 +86,14 @@ export function registerUploadProjetoRoutes(app: Express) {
       if (err?.message?.includes("Tipo de arquivo")) {
         res.status(400).json({ error: err.message });
       } else if (err?.code === "LIMIT_FILE_SIZE") {
-        res.status(400).json({ error: "Imagem muito grande. Máximo: 10MB." });
+        res.status(400).json({ error: "Imagem muito grande. Máximo: 20MB." });
       } else {
         res.status(500).json({ error: "Erro interno ao salvar imagem." });
       }
     }
   });
 
-  // GET /api/projetos/imagem/:id — serve a imagem de um projeto armazenada no banco
+  // GET /api/projetos/imagem/:id — serve imagem com cache em memória + HTTP cache
   app.get("/api/projetos/imagem/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id, 10);
@@ -82,34 +101,50 @@ export function registerUploadProjetoRoutes(app: Express) {
         res.status(400).send("ID inválido.");
         return;
       }
-      const pool = getPool();
-      const client = await pool.connect();
-      try {
-        const result = await client.query(
-          `SELECT imagem_dados, imagem_mime, "updatedAt" FROM projetos WHERE id = $1`,
-          [id]
-        );
-        if (result.rows.length === 0 || !result.rows[0].imagem_dados) {
-          res.status(404).send("Imagem não encontrada.");
-          return;
-        }
-        const { imagem_dados, imagem_mime, updatedAt } = result.rows[0];
-        // ETag baseado no timestamp de atualização — garante recarregamento quando a imagem muda
-        const etag = `"proj-${id}-${updatedAt ? new Date(updatedAt).getTime() : Date.now()}"`;
-        if (req.headers['if-none-match'] === etag) {
+
+      const now = Date.now();
+      const cached = imageCache.get(id);
+
+      // Verificar ETag antes de qualquer query
+      if (cached && now - cached.ts < CACHE_TTL_MS) {
+        if (req.headers["if-none-match"] === cached.etag) {
           res.status(304).end();
           return;
         }
-        res.setHeader("Content-Type", imagem_mime || "image/jpeg");
-        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-        res.setHeader("Pragma", "no-cache");
-        res.setHeader("Expires", "0");
-        res.setHeader("ETag", etag);
-        res.send(imagem_dados);
-      } finally {
-        client.release();
-        await pool.end();
+        res.setHeader("Content-Type", cached.mime);
+        res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=2592000");
+        res.setHeader("ETag", cached.etag);
+        res.send(cached.buffer);
+        return;
       }
+
+      // Cache miss ou expirado: buscar do banco
+      const pool = getPool();
+      const result = await pool.query(
+        `SELECT imagem_dados, imagem_mime, "updatedAt" FROM projetos WHERE id = $1`,
+        [id]
+      );
+
+      if (result.rows.length === 0 || !result.rows[0].imagem_dados) {
+        res.status(404).send("Imagem não encontrada.");
+        return;
+      }
+
+      const { imagem_dados, imagem_mime, updatedAt } = result.rows[0];
+      const etag = `"proj-${id}-${updatedAt ? new Date(updatedAt).getTime() : Date.now()}"`;
+
+      // Salvar no cache em memória
+      imageCache.set(id, { buffer: imagem_dados, mime: imagem_mime || "image/webp", etag, ts: now });
+
+      if (req.headers["if-none-match"] === etag) {
+        res.status(304).end();
+        return;
+      }
+
+      res.setHeader("Content-Type", imagem_mime || "image/webp");
+      res.setHeader("Cache-Control", "public, max-age=604800, stale-while-revalidate=2592000");
+      res.setHeader("ETag", etag);
+      res.send(imagem_dados);
     } catch (err: any) {
       console.error("[UploadProjeto] Erro ao servir imagem:", err?.message);
       res.status(500).send("Erro interno.");

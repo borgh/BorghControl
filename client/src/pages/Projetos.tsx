@@ -667,6 +667,8 @@ export default function Projetos() {
                   <img
                     src={`/api/projetos/imagem/${p.id}?v=${imgBustMap[p.id] ?? (p.updatedAt ? new Date(p.updatedAt).getTime() : p.id)}`}
                     alt={p.nome}
+                    loading="lazy"
+                    decoding="async"
                     className={`absolute inset-0 w-full h-full transition-transform duration-300 group-hover:scale-105 ${p.imagemFit === 'contain' ? 'object-contain' : 'object-cover'}`}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;

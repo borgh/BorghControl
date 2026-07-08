@@ -1,0 +1,58 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build backend
+        run: |
+          ./node_modules/.bin/esbuild server/_core/index.ts \
+            --bundle --platform=node --format=cjs \
+            --external:vite --external:node-cron --external:archiver --external:nodemailer --external:sharp \
+            --outfile=/tmp/index.cjs
+
+      - name: Build frontend
+        run: npx vite build --outDir /tmp/vite-build-out
+
+      - name: Package frontend
+        run: |
+          cd /tmp/vite-build-out && tar -czf /tmp/frontend-build.tar.gz .
+
+      - name: Install sshpass
+        run: sudo apt-get install -y sshpass
+
+      - name: Deploy backend via SCP + SSH
+        env:
+          SSHPASS: Borgh2026Control
+        run: |
+          sshpass -e scp -o StrictHostKeyChecking=no /tmp/index.cjs root@198.211.106.70:/var/www/borghcontrol/dist/index.cjs
+          sshpass -e ssh -o StrictHostKeyChecking=no root@198.211.106.70 "pm2 restart borghcontrol && sleep 3 && pm2 status"
+
+      - name: Deploy frontend via SCP
+        env:
+          SSHPASS: Borgh2026Control
+        run: |
+          sshpass -e scp -o StrictHostKeyChecking=no /tmp/frontend-build.tar.gz root@198.211.106.70:/tmp/
+          sshpass -e ssh -o StrictHostKeyChecking=no root@198.211.106.70 "cd /var/www/borghcontrol/dist/public && tar -xzf /tmp/frontend-build.tar.gz ."
+
+      - name: Run SQL migration
+        env:
+          SSHPASS: Borgh2026Control
+        run: |
+          sshpass -e ssh -o StrictHostKeyChecking=no root@198.211.106.70 \
+            "psql -U borghcontrol -d borghcontrol -c \"ALTER TABLE transacoes ADD COLUMN IF NOT EXISTS pago_em TIMESTAMP;\" && echo 'Migration OK'"

@@ -209,6 +209,7 @@ export async function listTransacoes(params: {
       prioridade: transacoes.prioridade,
       recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
       totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
+      pagoEm: transacoes.pagoEm,
       createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
       categoriaNome: categorias.nome, categoriaCor: categorias.cor, categoriaIcone: categorias.icone,
     })
@@ -236,6 +237,7 @@ export async function getTransacaoById(id: number) {
     prioridade: transacoes.prioridade,
     recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
     totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
+    pagoEm: transacoes.pagoEm,
     createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
     categoriaNome: categorias.nome, categoriaCor: categorias.cor,
   })
@@ -379,7 +381,16 @@ export async function deleteRecorrenciaGrupo(grupoId: string, aPartirDe?: { mes:
 export async function updateTransacao(id: number, data: Partial<InsertTransacao>) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");
-  const result = await db.update(transacoes).set({ ...data, updatedAt: new Date() }).where(eq(transacoes.id, id)).returning();
+  const updateData: Partial<InsertTransacao> & { pagoEm?: Date | null } = { ...data, updatedAt: new Date() };
+  // Se estiver marcando como pago, registrar data/hora
+  if (data.status === "pago") {
+    updateData.pagoEm = new Date();
+  }
+  // Se estiver voltando para pendente, limpar pago_em
+  if (data.status === "pendente" || data.status === "cancelado") {
+    updateData.pagoEm = null;
+  }
+  const result = await db.update(transacoes).set(updateData as any).where(eq(transacoes.id, id)).returning();
   return result[0];
 }
 

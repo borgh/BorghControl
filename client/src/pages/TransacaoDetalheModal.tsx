@@ -219,6 +219,34 @@ export function TransacaoDetalheModal({ open, item, onClose, onEdit, onRefresh, 
               </div>
             )}
 
+            {/* Data de pagamento/recebimento */}
+            {item.status === "pago" && item.pagoEm && (
+              <div className="flex items-start gap-3">
+                <CalendarDays className="h-4 w-4 text-emerald-500 mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">
+                    {isDespesa ? "Pago em" : "Recebido em"}
+                  </p>
+                  <p className="text-sm font-semibold text-emerald-700">
+                    {new Date(item.pagoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Data de última modificação */}
+            {item.updatedAt && (
+              <div className="flex items-start gap-3">
+                <CalendarDays className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-[11px] text-muted-foreground uppercase tracking-wide font-medium">Modificado em</p>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date(item.updatedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Observação */}
             {item.observacao && (
               <>

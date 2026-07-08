@@ -199,6 +199,8 @@ export async function initDatabase(): Promise<void> {
       // Migrations de colunas adicionadas após criação inicial das tabelas
       await client.query(`
         ALTER TABLE IF EXISTS projetos ADD COLUMN IF NOT EXISTS imagem_fit VARCHAR(20) DEFAULT 'cover';
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS pago_em TIMESTAMP;
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS dataVencimento DATE;
 
         -- Tabelas de backup
         CREATE TABLE IF NOT EXISTS backup_agendamentos (

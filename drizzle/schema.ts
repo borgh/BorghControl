@@ -78,6 +78,7 @@ export const transacoes = pgTable(
     recorrenciaGrupoId: varchar("recorrenciaGrupoId", { length: 64 }),
     totalParcelas: integer("totalParcelas"),
     parcelaAtual: integer("parcelaAtual"),
+    pagoEm: timestamp("pago_em"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },

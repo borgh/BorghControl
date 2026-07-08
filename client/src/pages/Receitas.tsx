@@ -315,9 +315,21 @@ export default function Receitas() {
                         </div>
 
                         <div className="flex items-center justify-between gap-2 mt-1">
-                          <p className={`text-[11px] leading-tight truncate min-w-0 ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
-                            {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <p className={`text-[11px] leading-tight truncate ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                              {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
+                            </p>
+                            {item.status === "pago" && item.pagoEm && (
+                              <p className="text-[10px] text-emerald-600 mt-0.5">
+                                Recebido em: {new Date(item.pagoEm).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            )}
+                            {item.status !== "pago" && item.updatedAt && item.updatedAt !== item.createdAt && (
+                              <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                                Modificado: {new Date(item.updatedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </p>
+                            )}
+                          </div>
 
                           <div className="flex items-center gap-1 shrink-0">
                             <StatusBadge item={item} />

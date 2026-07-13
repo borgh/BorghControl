@@ -6,9 +6,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity, FileText } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity, FileText, AlertTriangle, Clock } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
+import { AnexosBadge } from "@/components/AnexosBadge";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,6 +20,47 @@ const MESES = ["Todos", "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junh
 const fmt = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
 
 type OrdemKey = "vencimento_asc" | "vencimento_desc" | "valor_asc" | "valor_desc" | "descricao_asc" | "descricao_desc" | "status";
+
+/**
+ * Retorna true se a receita está em atraso:
+ * status=pendente E data de vencimento anterior a hoje.
+ */
+export function isEmAtrasoReceita(item: any): boolean {
+  if (item.status !== "pendente") return false;
+  const hoje = new Date();
+  const hojeStr = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}-${String(hoje.getDate()).padStart(2, "0")}`;
+  const venc = item.dataVencimento
+    ?? (item.diaVencimento
+      ? `${item.ano}-${String(item.mes).padStart(2, "0")}-${String(item.diaVencimento).padStart(2, "0")}`
+      : `${item.ano}-${String(item.mes).padStart(2, "0")}-01`);
+  return venc < hojeStr;
+}
+
+/**
+ * Retorna quantos dias faltam para o recebimento (0 = hoje, negativo = atrasado).
+ */
+export function diasParaReceberReceita(item: any): number | null {
+  const venc = item.dataVencimento
+    ?? (item.diaVencimento
+      ? `${item.ano}-${String(item.mes).padStart(2, "0")}-${String(item.diaVencimento).padStart(2, "0")}`
+      : null);
+  if (!venc) return null;
+  const hoje = new Date();
+  const hojeMs = Date.UTC(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const [y, m, d] = venc.split("-").map(Number);
+  const vencMs = Date.UTC(y, m - 1, d);
+  return Math.round((vencMs - hojeMs) / 86400000);
+}
+
+/**
+ * Retorna true se a receita está pendente (não em atraso) e vence em até 3 dias.
+ */
+export function isVenceEmBreveReceita(item: any): boolean {
+  if (item.status !== "pendente") return false;
+  if (isEmAtrasoReceita(item)) return false;
+  const dias = diasParaReceberReceita(item);
+  return dias !== null && dias >= 0 && dias <= 3;
+}
 
 function sortItems(items: any[], ordem: OrdemKey): any[] {
   return [...items].sort((a, b) => {
@@ -42,8 +84,14 @@ function sortItems(items: any[], ordem: OrdemKey): any[] {
       case "descricao_desc":
         return (b.descricao ?? "").localeCompare(a.descricao ?? "", "pt-BR");
       case "status": {
-        const order: Record<string, number> = { pendente: 0, pago: 1, cancelado: 2 };
-        return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+        // Em atraso primeiro, depois pendente, recebido, cancelado
+        const order = (i: any) => {
+          if (i.status === "cancelado") return 3;
+          if (i.status === "pago") return 2;
+          if (isEmAtrasoReceita(i)) return 0;
+          return 1;
+        };
+        return order(a) - order(b);
       }
       default:
         return 0;
@@ -69,6 +117,22 @@ function RecorrenciaBadge({ item }: { item: any }) {
 
 function StatusBadge({ item }: { item: any }) {
   if (item.status === "pendente") {
+    if (isEmAtrasoReceita(item)) {
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 bg-red-100 text-red-700 border border-red-300 hover:bg-red-100 shrink-0 gap-1">
+          <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso
+        </Badge>
+      );
+    }
+    const dias = diasParaReceberReceita(item);
+    if (dias !== null && dias >= 0 && dias <= 3) {
+      const label = dias === 0 ? "Vence hoje" : dias === 1 ? "Vence amanhã" : `Vence em ${dias}d`;
+      return (
+        <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100 shrink-0 gap-1">
+          <Clock className="h-2.5 w-2.5" /> {label}
+        </Badge>
+      );
+    }
     return <Badge className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-100 shrink-0">Pendente</Badge>;
   }
   if (item.status === "cancelado") {
@@ -81,7 +145,7 @@ export default function Receitas() {
   const hoje = new Date();
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
-  const [status, setStatus] = useState("todos");
+  const [status, setStatus] = useState<string>("todos");
   const [busca, setBusca] = useState("");
   const [filtroNF, setFiltroNF] = useState<"todos" | "sim" | "nao">("todos");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
@@ -98,6 +162,8 @@ export default function Receitas() {
     return Array.from(set).sort((a, b) => b - a);
   }, [anosData]);
 
+  // Para "em_atraso" e "vence_em_breve", buscamos todos os pendentes e filtramos no frontend
+  const queryStatus = (status === "em_atraso" || status === "vence_em_breve") ? "pendente" : (status !== "todos" ? status as any : undefined);
   // Quando não há filtro de mês, usar limite alto para retornar todos os registros corretamente
   const queryLimit = mes === "0" ? 5000 : 500;
 
@@ -105,7 +171,7 @@ export default function Receitas() {
     tipo: "receita",
     mes: mes !== "0" ? Number(mes) : undefined,
     ano: ano !== "0" ? Number(ano) : undefined,
-    status: status !== "todos" ? status as any : undefined,
+    status: queryStatus,
     busca: busca || undefined,
     emitirNF: filtroNF === "sim" ? true : filtroNF === "nao" ? false : undefined,
     limit: queryLimit,
@@ -132,10 +198,21 @@ export default function Receitas() {
 
   const { can } = usePermissions();
   const rawItems = data?.items ?? [];
-  const items = useMemo(() => sortItems(rawItems, ordem), [rawItems, ordem]);
+
+  // Aplica filtro de "em atraso" ou "pendente puro" no frontend
+  const filteredItems = useMemo(() => {
+    if (status === "em_atraso") return rawItems.filter((i: any) => isEmAtrasoReceita(i));
+    if (status === "pendente") return rawItems.filter((i: any) => i.status === "pendente" && !isEmAtrasoReceita(i));
+    if (status === "vence_em_breve") return rawItems.filter((i: any) => isVenceEmBreveReceita(i));
+    return rawItems;
+  }, [rawItems, status]);
+
+  const items = useMemo(() => sortItems(filteredItems, ordem), [filteredItems, ordem]);
   const total = rawItems.reduce((s: number, i: any) => s + Number(i.valor), 0);
   const totalRecebido = rawItems.filter((i: any) => i.status === "pago").reduce((s: number, i: any) => s + Number(i.valor), 0);
-  const totalPendente = rawItems.filter((i: any) => i.status === "pendente").reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalPendente = rawItems.filter((i: any) => i.status === "pendente" && !isEmAtrasoReceita(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const totalAtraso = rawItems.filter((i: any) => isEmAtrasoReceita(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
+  const itensVenceEmBreve = rawItems.filter((i: any) => isVenceEmBreveReceita(i));
 
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
@@ -173,8 +250,25 @@ export default function Receitas() {
         )}
       </div>
 
+      {/* Banner de alerta — vence em breve */}
+      {itensVenceEmBreve.length > 0 && status !== "vence_em_breve" && (
+        <div
+          className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700 cursor-pointer hover:bg-amber-100 transition-colors"
+          onClick={() => setStatus("vence_em_breve")}
+          title="Clique para filtrar receitas que vencem em breve"
+        >
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            {itensVenceEmBreve.length === 1
+              ? "1 receita vence nos próximos 3 dias"
+              : `${itensVenceEmBreve.length} receitas vencem nos próximos 3 dias`}
+          </span>
+          <span className="ml-auto text-amber-500 underline">Ver</span>
+        </div>
+      )}
+
       {/* Resumo */}
-      <div className="grid grid-cols-3 gap-2">
+      <div className={`grid gap-2 ${totalAtraso > 0 ? "grid-cols-4" : "grid-cols-3"}`}>
         <Card className="bg-emerald-50 border-emerald-100 overflow-hidden">
           <CardContent className="p-2 sm:p-3 text-center">
             <p className="text-[9px] sm:text-[10px] text-emerald-600 font-medium uppercase tracking-wide">Total</p>
@@ -187,12 +281,22 @@ export default function Receitas() {
             <p className="text-[10px] sm:text-sm font-bold text-emerald-700 tabular-nums leading-tight break-all">{fmt(totalRecebido)}</p>
           </CardContent>
         </Card>
-        <Card className="bg-amber-50 border-amber-100 overflow-hidden">
+        <Card className="bg-amber-50 border-amber-100 overflow-hidden cursor-pointer hover:bg-amber-100 transition-colors" onClick={() => setStatus("pendente")} title="Filtrar apenas Pendentes">
           <CardContent className="p-2 sm:p-3 text-center">
             <p className="text-[9px] sm:text-[10px] text-amber-600 font-medium uppercase tracking-wide">Pendente</p>
             <p className="text-[10px] sm:text-sm font-bold text-amber-700 tabular-nums leading-tight break-all">{fmt(totalPendente)}</p>
           </CardContent>
         </Card>
+        {totalAtraso > 0 && (
+          <Card className="bg-red-100 border-red-300 overflow-hidden cursor-pointer hover:bg-red-200 transition-colors" onClick={() => setStatus("em_atraso")} title="Filtrar apenas Em Atraso">
+            <CardContent className="p-2 sm:p-3 text-center">
+              <p className="text-[9px] sm:text-[10px] text-red-600 font-medium uppercase tracking-wide flex items-center justify-center gap-1">
+                <AlertTriangle className="h-2.5 w-2.5" /> Em Atraso
+              </p>
+              <p className="text-[10px] sm:text-sm font-bold text-red-700 tabular-nums leading-tight break-all">{fmt(totalAtraso)}</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Filtros */}
@@ -221,10 +325,12 @@ export default function Receitas() {
                 </SelectContent>
               </Select>
               <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-9 text-xs sm:w-32"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 text-xs sm:w-40"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="pendente">Pendente</SelectItem>
+                  <SelectItem value="vence_em_breve">🕐 Vence em 3 dias</SelectItem>
+                  <SelectItem value="em_atraso">⚠️ Em Atraso</SelectItem>
                   <SelectItem value="pago">Recebido</SelectItem>
                   <SelectItem value="cancelado">Cancelado</SelectItem>
                 </SelectContent>
@@ -272,6 +378,7 @@ export default function Receitas() {
               {items.map((item: any) => {
                 const isPendente = item.status === "pendente";
                 const isCancelado = item.status === "cancelado";
+                const isAtraso = isEmAtrasoReceita(item);
 
                 const dataVenc = item.dataVencimento
                   ? new Date(item.dataVencimento + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
@@ -287,11 +394,13 @@ export default function Receitas() {
                       setDetalheItem(item);
                     }}
                     className={`px-3 py-3 transition-colors group cursor-pointer ${
-                      isPendente
-                        ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
-                        : isCancelado
-                          ? "bg-muted/20 hover:bg-muted/30 opacity-60"
-                          : "hover:bg-muted/30"
+                      isAtraso
+                        ? "bg-red-50/70 hover:bg-red-50 border-l-2 border-l-red-400"
+                        : isPendente
+                          ? "bg-amber-50/70 hover:bg-amber-50 border-l-2 border-l-amber-400"
+                          : isCancelado
+                            ? "bg-muted/20 hover:bg-muted/30 opacity-60"
+                            : "hover:bg-muted/30"
                     }`}
                   >
                     <div className="flex items-start gap-2">
@@ -299,7 +408,7 @@ export default function Receitas() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                            <p className={`text-sm font-semibold leading-tight truncate ${isPendente ? "text-amber-900" : ""}`}>
+                            <p className={`text-sm font-semibold leading-tight truncate ${isAtraso ? "text-red-700" : isPendente ? "text-amber-800" : isCancelado ? "text-muted-foreground" : ""}`}>
                               {item.descricao}
                             </p>
                             <RecorrenciaBadge item={item} />
@@ -309,14 +418,14 @@ export default function Receitas() {
                               </Badge>
                             )}
                           </div>
-                          <span className={`text-sm font-bold tabular-nums shrink-0 ${isPendente ? "text-amber-700" : "text-emerald-600"}`}>
+                          <span className={`text-sm font-bold tabular-nums shrink-0 ${isAtraso ? "text-red-700" : isPendente ? "text-amber-700" : "text-emerald-600"}`}>
                             {fmt(Number(item.valor))}
                           </span>
                         </div>
 
                         <div className="flex items-center justify-between gap-2 mt-1">
                           <div className="min-w-0 flex-1">
-                            <p className={`text-[11px] leading-tight truncate ${isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
+                            <p className={`text-[11px] leading-tight truncate ${isAtraso ? "text-red-600" : isPendente ? "text-amber-700" : "text-muted-foreground"}`}>
                               {[item.categoriaNome, item.formaPagamento, dataVenc, `${MESES[item.mes]?.slice(0,3)}/${item.ano}`].filter(Boolean).join(" · ")}
                             </p>
                             {item.status === "pago" && item.pagoEm && (
@@ -332,6 +441,7 @@ export default function Receitas() {
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
+                            <AnexosBadge transacaoId={item.id} count={item.anexosCount} />
                             <StatusBadge item={item} />
                             {isPendente && can("mark_paid") && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => marcarPago.mutate({ id: item.id })} title="Marcar como recebido">

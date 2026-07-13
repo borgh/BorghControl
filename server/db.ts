@@ -611,7 +611,7 @@ export async function getResumoMensal(mes: number, ano: number) {
     tipo: transacoes.tipo, status: transacoes.status,
     totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
   }).from(transacoes).where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano))).groupBy(transacoes.tipo, transacoes.status);
-  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0;
+  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0, totalPendenteReceitas = 0;
   for (const row of result) {
     const v = Number(row.totalValor);
     if (row.tipo === "receita") totalReceitas += v;
@@ -619,6 +619,8 @@ export async function getResumoMensal(mes: number, ano: number) {
     if (row.status === "pago") totalPago += v;
     // totalPendente: apenas DESPESAS pendentes (contas a pagar)
     if (row.tipo === "despesa" && row.status === "pendente") totalPendente += v;
+    // totalPendenteReceitas: apenas RECEITAS pendentes (contas a receber)
+    if (row.tipo === "receita" && row.status === "pendente") totalPendenteReceitas += v;
   }
   // Calcula total em atraso: despesas pendentes com vencimento anterior a hoje
   // Para meses futuros, totalAtraso = 0 (nada pode estar atrasado no futuro)
@@ -645,7 +647,7 @@ export async function getResumoMensal(mes: number, ano: number) {
     ));
     totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
   }
-  return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
+  return { mes, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalPendenteReceitas, totalAtraso, saldo: totalReceitas - totalDespesas };
 }
 
 export async function getResumoAnual(ano: number) {
@@ -781,7 +783,7 @@ export async function getResumoAnualTotal(ano: number) {
     tipo: transacoes.tipo, status: transacoes.status,
     totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
   }).from(transacoes).where(eq(transacoes.ano, ano)).groupBy(transacoes.tipo, transacoes.status);
-  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0;
+  let totalReceitas = 0, totalDespesas = 0, totalPago = 0, totalPendente = 0, totalPendenteReceitas = 0;
   for (const row of result) {
     const v = Number(row.totalValor);
     if (row.tipo === "receita") totalReceitas += v;
@@ -789,6 +791,8 @@ export async function getResumoAnualTotal(ano: number) {
     if (row.status === "pago") totalPago += v;
     // totalPendente: apenas DESPESAS pendentes (contas a pagar)
     if (row.tipo === "despesa" && row.status === "pendente") totalPendente += v;
+    // totalPendenteReceitas: apenas RECEITAS pendentes (contas a receber)
+    if (row.tipo === "receita" && row.status === "pendente") totalPendenteReceitas += v;
   }
   const hoje = new Date();
   const diaAtual = hoje.getDate();
@@ -812,7 +816,7 @@ export async function getResumoAnualTotal(ano: number) {
     ));
     totalAtraso = Number(atrasoResult[0]?.totalValor ?? 0);
   }
-  return { mes: 0, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalAtraso, saldo: totalReceitas - totalDespesas };
+  return { mes: 0, ano, totalReceitas, totalDespesas, totalPago, totalPendente, totalPendenteReceitas, totalAtraso, saldo: totalReceitas - totalDespesas };
 }
 
 export async function getDespesasPorCategoriaAno(ano: number) {
@@ -856,14 +860,16 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
   const totais = await db.select({
     tipo: transacoes.tipo, status: transacoes.status, count: sql<number>`COUNT(*)`,
   }).from(transacoes).where(totaisWhere!).groupBy(transacoes.tipo, transacoes.status);
-  let contDespesas = 0, contReceitas = 0, contPendentes = 0;
+  let contDespesas = 0, contReceitas = 0, contPendentes = 0, contPendentesReceitas = 0;
   for (const t of totais) {
     if (t.tipo === "despesa") contDespesas += Number(t.count);
     if (t.tipo === "receita") contReceitas += Number(t.count);
     // contPendentes: apenas DESPESAS pendentes (contas a pagar)
     if (t.tipo === "despesa" && t.status === "pendente") contPendentes += Number(t.count);
+    // contPendentesReceitas: apenas RECEITAS pendentes (contas a receber)
+    if (t.tipo === "receita" && t.status === "pendente") contPendentesReceitas += Number(t.count);
   }
-  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes } };
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes, pendentesReceitas: contPendentesReceitas } };
 }
 
 export async function getAnosDisponiveis() {

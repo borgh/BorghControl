@@ -210,18 +210,20 @@ export default function Dashboard() {
       {(() => {
         const totalAtraso = rm?.totalAtraso ?? 0;
         const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
+        const totalPendenteReceitas = (rm as any)?.totalPendenteReceitas ?? 0;
         const hasAtraso = totalAtraso > 0;
         // Usa dados do backend para despesas que vencem em até 3 dias
         const venceEmBreve = stats?.venceEmBreve ?? [];
         const hasVenceEmBreve = venceEmBreve.length > 0;
-        const colCount = 4 + (hasAtraso ? 1 : 0) + (hasVenceEmBreve ? 1 : 0);
+        const colCount = 5 + (hasAtraso ? 1 : 0) + (hasVenceEmBreve ? 1 : 0);
         const gridClass = `grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-${colCount}`;
         return (
           <div className={gridClass}>
             <StatCard title={mesFiltro === 0 ? "Receitas do Ano" : "Receitas do Mês"} value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
             <StatCard title={mesFiltro === 0 ? "Despesas do Ano" : "Despesas do Mês"} value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
             <StatCard title={mesFiltro === 0 ? "Saldo do Ano" : "Saldo do Mês"} value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
-            <StatCard title="Pendentes" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
+            <StatCard title="Pendentes a Pagar" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
+            <StatCard title="Pendentes a Receber" value={fmt(totalPendenteReceitas)} icon={TrendingUp} color="bg-teal-500" sub={`${(stats?.contadores as any)?.pendentesReceitas ?? 0} lançamentos`} href="/receitas?status=pendente" />
             {hasAtraso && (
               <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas?status=em_atraso" />
             )}

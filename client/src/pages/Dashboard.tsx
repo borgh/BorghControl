@@ -211,6 +211,7 @@ export default function Dashboard() {
         const totalAtraso = rm?.totalAtraso ?? 0;
         const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
         const totalPendenteReceitas = (rm as any)?.totalPendenteReceitas ?? 0;
+        const saldoPendente = totalPendenteReceitas - totalPendenteReal;
         const hasAtraso = totalAtraso > 0;
         // Usa dados do backend para despesas que vencem em até 3 dias
         const venceEmBreve = stats?.venceEmBreve ?? [];
@@ -218,6 +219,7 @@ export default function Dashboard() {
         const colCount = 5 + (hasAtraso ? 1 : 0) + (hasVenceEmBreve ? 1 : 0);
         const gridClass = `grid gap-2 sm:gap-4 grid-cols-2 lg:grid-cols-${colCount}`;
         return (
+          <>
           <div className={gridClass}>
             <StatCard title={mesFiltro === 0 ? "Receitas do Ano" : "Receitas do Mês"} value={fmt(rm?.totalReceitas ?? 0)} icon={TrendingUp} color="bg-emerald-500" href="/receitas" />
             <StatCard title={mesFiltro === 0 ? "Despesas do Ano" : "Despesas do Mês"} value={fmt(rm?.totalDespesas ?? 0)} icon={TrendingDown} color="bg-red-500" href="/despesas" />
@@ -231,6 +233,61 @@ export default function Dashboard() {
               <StatCard title="Vence em Breve" value={String(venceEmBreve.length)} icon={Clock} color="bg-orange-500" sub="próximos 3 dias" href="/despesas?status=vence_em_breve" />
             )}
           </div>
+
+          {/* Card de Saldo Pendente — discrepância entre a receber e a pagar */}
+          <Card className={`border-2 transition-colors ${
+            saldoPendente > 0 ? "border-emerald-200 bg-emerald-50/40" :
+            saldoPendente < 0 ? "border-red-200 bg-red-50/40" :
+            "border-border"
+          }`}>
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    saldoPendente > 0 ? "bg-emerald-500" : saldoPendente < 0 ? "bg-red-500" : "bg-muted"
+                  }`}>
+                    {saldoPendente >= 0
+                      ? <ArrowUpRight className="h-5 w-5 text-white" />
+                      : <ArrowDownRight className="h-5 w-5 text-white" />}
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saldo Pendente</p>
+                    <p className={`text-xl sm:text-2xl font-bold tabular-nums ${
+                      saldoPendente > 0 ? "text-emerald-700" : saldoPendente < 0 ? "text-red-600" : "text-foreground"
+                    }`}>
+                      {saldoPendente >= 0 ? "+" : ""}{fmt(saldoPendente)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {saldoPendente > 0
+                        ? "Você tem mais a receber do que a pagar"
+                        : saldoPendente < 0
+                        ? "Você tem mais a pagar do que a receber"
+                        : "Receber e pagar estão equilibrados"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-6 sm:gap-10 text-sm">
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">A Receber</p>
+                    <p className="font-semibold text-teal-700 tabular-nums">{fmt(totalPendenteReceitas)}</p>
+                  </div>
+                  <div className="text-muted-foreground text-lg font-light select-none">−</div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">A Pagar</p>
+                    <p className="font-semibold text-amber-700 tabular-nums">{fmt(totalPendenteReal)}</p>
+                  </div>
+                  <div className="text-muted-foreground text-lg font-light select-none">=</div>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Saldo</p>
+                    <p className={`font-bold tabular-nums ${
+                      saldoPendente > 0 ? "text-emerald-700" : saldoPendente < 0 ? "text-red-600" : "text-foreground"
+                    }`}>{saldoPendente >= 0 ? "+" : ""}{fmt(saldoPendente)}</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          </>
         );
       })()}
 

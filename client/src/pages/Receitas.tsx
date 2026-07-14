@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -145,7 +146,18 @@ export default function Receitas() {
   const hoje = new Date();
   const [mes, setMes] = useState(String(hoje.getMonth() + 1));
   const [ano, setAno] = useState(String(hoje.getFullYear()));
-  const [status, setStatus] = useState<string>("todos");
+  const searchStr = useSearch();
+  // Lê o status inicial da URL (funciona tanto na montagem quanto na navegação)
+  const [status, setStatus] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("status") ?? "todos";
+  });
+  // Atualiza o filtro quando a URL mudar (ex: navegação do dashboard)
+  useEffect(() => {
+    const params = new URLSearchParams(searchStr);
+    const s = params.get("status") ?? "todos";
+    setStatus(s);
+  }, [searchStr]);
   const [busca, setBusca] = useState("");
   const [filtroNF, setFiltroNF] = useState<"todos" | "sim" | "nao">("todos");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");

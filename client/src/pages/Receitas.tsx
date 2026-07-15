@@ -349,7 +349,7 @@ export default function Receitas() {
                   <SelectItem value="todas">Todas as categorias</SelectItem>
                   {(categoriasData ?? []).map((c: any) => (
                     <SelectItem key={c.id} value={String(c.id)}>
-                      <span className="flex items-center gap-2">{c.icone && <span>{c.icone}</span>}{c.nome}</span>
+                      {c.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>

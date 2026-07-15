@@ -75,7 +75,7 @@ export const appRouter = router({
   }),
   transacoes: router({
     list: publicProcedure
-      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional(), emitirNF: z.boolean().optional(), prioridade: z.boolean().optional() }).optional())
+      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional(), emitirNF: z.boolean().optional(), prioridade: z.boolean().optional(), categoriaId: z.number().optional(), dataInicio: z.string().optional(), dataFim: z.string().optional() }).optional())
       .query(async ({ input }) => listTransacoes(input ?? {})),
     getById: publicProcedure
       .input(z.object({ id: z.number() }))

@@ -6,8 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle, Clock } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle, Clock, CalendarRange, Tag, X, CalendarDays } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { AnexosBadge } from "@/components/AnexosBadge";
@@ -164,6 +168,12 @@ export default function Despesas() {
   const [busca, setBusca] = useState("");
   const [ordem, setOrdem] = useState<OrdemKey>("vencimento_asc");
   const [filtroPrioridade, setFiltroPrioridade] = useState("todos");
+  // Filtros novos: categoria e intervalo de datas
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
+  const [modoData, setModoData] = useState<"mes" | "intervalo">("mes");
+  const [dataInicio, setDataInicio] = useState<Date | undefined>(undefined);
+  const [dataFim, setDataFim] = useState<Date | undefined>(undefined);
+  const [calAberto, setCalAberto] = useState<"inicio" | "fim" | null>(null);
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [detalheItem, setDetalheItem] = useState<any>(null);
@@ -177,21 +187,26 @@ export default function Despesas() {
     return Array.from(set).sort((a, b) => b - a);
   }, [anosData]);
 
+  // Categorias disponíveis
+  const { data: categoriasData } = trpc.categorias.list.useQuery({ tipo: "despesa" });
+
   // Para "em_atraso" e "vence_em_breve", buscamos todos os pendentes e filtramos no frontend
   const queryStatus = (status === "em_atraso" || status === "vence_em_breve") ? "pendente" : (status !== "todos" ? status as any : undefined);
 
-  // Quando não há filtro de mês (todos os meses), precisamos de limite alto para garantir que
-  // todos os registros sejam retornados antes do filtro de "em_atraso"/"vence_em_breve" no frontend.
-  // Sem isso, o limite padrão de 100 corta o dataset e o filtro retorna resultados incorretos.
-  const queryLimit = mes === "0" ? 5000 : 500;
+  const queryLimit = (mes === "0" || modoData === "intervalo") ? 5000 : 500;
+  const dataInicioStr = dataInicio ? format(dataInicio, "yyyy-MM-dd") : undefined;
+  const dataFimStr = dataFim ? format(dataFim, "yyyy-MM-dd") : undefined;
 
   const { data, isLoading } = trpc.transacoes.list.useQuery({
     tipo: "despesa",
-    mes: mes !== "0" ? Number(mes) : undefined,
-    ano: ano !== "0" ? Number(ano) : undefined,
+    mes: modoData === "mes" && mes !== "0" ? Number(mes) : undefined,
+    ano: modoData === "mes" && ano !== "0" ? Number(ano) : undefined,
+    dataInicio: modoData === "intervalo" ? dataInicioStr : undefined,
+    dataFim: modoData === "intervalo" ? dataFimStr : undefined,
     status: queryStatus,
     busca: busca || undefined,
     prioridade: filtroPrioridade === "sim" ? true : filtroPrioridade === "nao" ? false : undefined,
+    categoriaId: categoriaFiltro !== "todas" ? Number(categoriaFiltro) : undefined,
     limit: queryLimit,
   });
 
@@ -328,61 +343,138 @@ export default function Despesas() {
       {/* Filtros */}
       <Card>
         <CardContent className="p-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-            {/* Busca */}
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9 w-full" />
+          <div className="flex flex-col gap-3">
+            {/* Linha 1: Busca + Categoria */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Buscar..." value={busca} onChange={(e) => setBusca(e.target.value)} className="pl-9 h-9 w-full" />
+              </div>
+              <Select value={categoriaFiltro} onValueChange={setCategoriaFiltro}>
+                <SelectTrigger className="h-9 text-xs sm:w-48">
+                  <div className="flex items-center gap-1.5">
+                    <Tag className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <SelectValue placeholder="Categoria" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas as categorias</SelectItem>
+                  {(categoriasData ?? []).map((c: any) => (
+                    <SelectItem key={c.id} value={String(c.id)}>
+                      <span className="flex items-center gap-2">{c.icone && <span>{c.icone}</span>}{c.nome}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            {/* Mês / Ano / Status */}
-            <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-2">
-              <Select value={mes} onValueChange={setMes}>
-                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Todos os meses</SelectItem>
-                  {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={ano} onValueChange={setAno}>
-                <SelectTrigger className="h-9 text-xs sm:w-28"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">Todos</SelectItem>
-                  {anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="pendente">Pendente</SelectItem>
-                  <SelectItem value="vence_em_breve">🕐 Vence em 3 dias</SelectItem>
-                  <SelectItem value="em_atraso">⚠️ Em Atraso</SelectItem>
-                  <SelectItem value="pago">Pago</SelectItem>
-                  <SelectItem value="cancelado">Cancelado</SelectItem>
-                </SelectContent>
-              </Select>
-              {/* Prioridade */}
-              <Select value={filtroPrioridade} onValueChange={setFiltroPrioridade}>
-                <SelectTrigger className="h-9 text-xs sm:w-36"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todas</SelectItem>
-                  <SelectItem value="sim">🔥 Alta Prioridade</SelectItem>
-                  <SelectItem value="nao">Prioridade Normal</SelectItem>
-                </SelectContent>
-              </Select>
-              {/* Ordenação */}
-              <Select value={ordem} onValueChange={(v) => setOrdem(v as OrdemKey)}>
-                <SelectTrigger className="h-9 text-xs sm:w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="vencimento_asc">Vencimento ↑</SelectItem>
-                  <SelectItem value="vencimento_desc">Vencimento ↓</SelectItem>
-                  <SelectItem value="valor_asc">Valor ↑</SelectItem>
-                  <SelectItem value="valor_desc">Valor ↓</SelectItem>
-                  <SelectItem value="descricao_asc">Descrição A→Z</SelectItem>
-                  <SelectItem value="descricao_desc">Descrição Z→A</SelectItem>
-                  <SelectItem value="status">Status (atraso primeiro)</SelectItem>
-                </SelectContent>
-              </Select>
+            {/* Linha 2: Toggle modo data + seletores de período */}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex rounded-lg border border-border overflow-hidden text-xs">
+                  <button
+                    onClick={() => setModoData("mes")}
+                    className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
+                      modoData === "mes" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <CalendarDays className="h-3.5 w-3.5" /> Mês/Ano
+                  </button>
+                  <button
+                    onClick={() => setModoData("intervalo")}
+                    className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors ${
+                      modoData === "intervalo" ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <CalendarRange className="h-3.5 w-3.5" /> Intervalo
+                  </button>
+                </div>
+                {modoData === "intervalo" && (dataInicio || dataFim) && (
+                  <button onClick={() => { setDataInicio(undefined); setDataFim(undefined); }} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    <X className="h-3.5 w-3.5" /> Limpar datas
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {modoData === "mes" ? (
+                  <>
+                    <Select value={mes} onValueChange={setMes}>
+                      <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Todos os meses</SelectItem>
+                        {MESES.slice(1).map((m, i) => <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={ano} onValueChange={setAno}>
+                      <SelectTrigger className="h-9 text-xs w-28"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="0">Todos</SelectItem>
+                        {anos.map((a: number) => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </>
+                ) : (
+                  <>
+                    <Popover open={calAberto === "inicio"} onOpenChange={(o) => setCalAberto(o ? "inicio" : null)}>
+                      <PopoverTrigger asChild>
+                        <button className={`h-9 px-3 rounded-md border text-xs flex items-center gap-2 transition-colors ${
+                          dataInicio ? "border-primary text-foreground" : "border-border text-muted-foreground"
+                        } bg-background hover:bg-muted`}>
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {dataInicio ? format(dataInicio, "dd/MM/yyyy") : "Data início"}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dataInicio} onSelect={(d) => { setDataInicio(d); setCalAberto(null); }} locale={ptBR} initialFocus />
+                      </PopoverContent>
+                    </Popover>
+                    <span className="text-muted-foreground text-xs self-center">até</span>
+                    <Popover open={calAberto === "fim"} onOpenChange={(o) => setCalAberto(o ? "fim" : null)}>
+                      <PopoverTrigger asChild>
+                        <button className={`h-9 px-3 rounded-md border text-xs flex items-center gap-2 transition-colors ${
+                          dataFim ? "border-primary text-foreground" : "border-border text-muted-foreground"
+                        } bg-background hover:bg-muted`}>
+                          <CalendarDays className="h-3.5 w-3.5" />
+                          {dataFim ? format(dataFim, "dd/MM/yyyy") : "Data fim"}
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={dataFim} onSelect={(d) => { setDataFim(d); setCalAberto(null); }} locale={ptBR} initialFocus disabled={(d) => dataInicio ? d < dataInicio : false} />
+                      </PopoverContent>
+                    </Popover>
+                  </>
+                )}
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="vence_em_breve">🕐 Vence em 3 dias</SelectItem>
+                    <SelectItem value="em_atraso">⚠️ Em Atraso</SelectItem>
+                    <SelectItem value="pago">Pago</SelectItem>
+                    <SelectItem value="cancelado">Cancelado</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={filtroPrioridade} onValueChange={setFiltroPrioridade}>
+                  <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todas</SelectItem>
+                    <SelectItem value="sim">🔥 Alta Prioridade</SelectItem>
+                    <SelectItem value="nao">Prioridade Normal</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={ordem} onValueChange={(v) => setOrdem(v as OrdemKey)}>
+                  <SelectTrigger className="h-9 text-xs w-44"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="vencimento_asc">Vencimento ↑</SelectItem>
+                    <SelectItem value="vencimento_desc">Vencimento ↓</SelectItem>
+                    <SelectItem value="valor_asc">Valor ↑</SelectItem>
+                    <SelectItem value="valor_desc">Valor ↓</SelectItem>
+                    <SelectItem value="descricao_asc">Descrição A→Z</SelectItem>
+                    <SelectItem value="descricao_desc">Descrição Z→A</SelectItem>
+                    <SelectItem value="status">Status (atraso primeiro)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardContent>

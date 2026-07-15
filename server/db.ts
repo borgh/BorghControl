@@ -1,4 +1,4 @@
-import { eq, and, or, desc, sql, ilike } from "drizzle-orm";
+import { eq, and, or, desc, sql, ilike, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
@@ -183,17 +183,25 @@ export async function listTransacoes(params: {
   mes?: number; ano?: number; tipo?: "despesa" | "receita";
   status?: "pendente" | "pago" | "cancelado"; busca?: string;
   limit?: number; offset?: number; emitirNF?: boolean; prioridade?: boolean;
+  categoriaId?: number; dataInicio?: string; dataFim?: string;
 }) {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const conditions: any[] = [];
-  if (params.mes) conditions.push(eq(transacoes.mes, params.mes));
-  if (params.ano) conditions.push(eq(transacoes.ano, params.ano));
+  // Se tiver intervalo de datas, filtra por dataVencimento; caso contrário usa mes/ano
+  if (params.dataInicio && params.dataFim) {
+    conditions.push(gte(transacoes.dataVencimento, params.dataInicio));
+    conditions.push(lte(transacoes.dataVencimento, params.dataFim));
+  } else {
+    if (params.mes) conditions.push(eq(transacoes.mes, params.mes));
+    if (params.ano) conditions.push(eq(transacoes.ano, params.ano));
+  }
   if (params.tipo) conditions.push(eq(transacoes.tipo, params.tipo));
   if (params.status) conditions.push(eq(transacoes.status, params.status));
   if (params.busca) conditions.push(ilike(transacoes.descricao, `%${params.busca}%`));
   if (params.emitirNF !== undefined) conditions.push(eq(transacoes.emitirNF, params.emitirNF));
   if (params.prioridade !== undefined) conditions.push(eq(transacoes.prioridade, params.prioridade));
+  if (params.categoriaId !== undefined) conditions.push(eq(transacoes.categoriaId, params.categoriaId));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const limit = params.limit ?? 100;
   const offset = params.offset ?? 0;

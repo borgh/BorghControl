@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { initDatabase } from "../initDb";
 import { registerAnexosRoutes } from "../anexos";
 import { registerUploadProjetoRoutes } from "../upload-projeto";
+import { iniciarCronBackup } from "../backup-cron";
 import path from "path";
 import fs from "fs";
 
@@ -62,6 +63,9 @@ async function startServer() {
   
   // Initialize PostgreSQL tables on startup
   await initDatabase();
+
+  // Iniciar cron de backup automático
+  await iniciarCronBackup();
   
   registerStorageProxy(app);
   registerAnexosRoutes(app);

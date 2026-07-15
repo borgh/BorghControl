@@ -1,14 +1,11 @@
 /**
  * BorghControl - Gerenciador de Cron de Backup
- * Carrega agendamentos do banco e agenda execuções com node-cron
+ * Usa setInterval nativo (sem node-cron) para evitar problemas com import.meta.url em bundles CJS.
+ * Verifica agendamentos a cada minuto e executa o backup no horário configurado.
  */
-import cron from "node-cron";
 import { Pool } from "pg";
 import { executarBackup } from "./backup";
 import { ENV } from "./_core/env";
-
-// Mapa de tasks ativas: agendamentoId -> task
-const tarefasAtivas = new Map<number, cron.ScheduledTask>();
 
 function getPool(): Pool {
   const url = ENV.databaseUrl;
@@ -23,21 +20,13 @@ function getPool(): Pool {
   });
 }
 
-// Converter horario HH:MM e diasSemana para expressão cron
-// Cron: "minuto hora * * diasSemana"
-function buildCronExpression(horario: string, diasSemana: number[] | null): string {
-  const [hh, mm] = horario.split(":").map(Number);
-  const dias = diasSemana && diasSemana.length > 0 ? diasSemana.join(",") : "*";
-  return `${mm} ${hh} * * ${dias}`;
-}
-
 export async function iniciarCronBackup(): Promise<void> {
   if (!ENV.databaseUrl) return;
 
   // Verificar agendamentos a cada minuto
-  cron.schedule("* * * * *", async () => {
+  setInterval(async () => {
     await verificarEExecutarAgendamentos();
-  });
+  }, 60 * 1000);
 
   console.log("[Backup Cron] Iniciado — verificando agendamentos a cada minuto.");
 }
@@ -70,15 +59,17 @@ async function verificarEExecutarAgendamentos(): Promise<void> {
 
       if (!deveExecutar) continue;
 
-      // Verificar se já executou NESTE horário específico hoje
-      // (permite re-execução se o horário foi editado para outro momento)
+      // Verificar se já executou NESTE horário específico hoje (em UTC)
+      // Usa comparação UTC pura para evitar problemas de timezone com TIMESTAMP WITHOUT TIME ZONE
       const jaExecutouNesteHorario = await client.query(
         `SELECT id FROM backup_logs
          WHERE agendamento_id = $1
            AND status IN ('sucesso', 'em_andamento')
-           AND DATE(iniciado_em AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'
-           AND TO_CHAR(iniciado_em AT TIME ZONE 'America/Sao_Paulo', 'HH24:MI') = $2`,
-        [ag.id, horaAtual]
+           AND DATE(iniciado_em) = CURRENT_DATE
+           AND TO_CHAR(iniciado_em, 'HH24:MI') BETWEEN
+               TO_CHAR((NOW() - INTERVAL '1 minute'), 'HH24:MI')
+               AND TO_CHAR(NOW(), 'HH24:MI')`,
+        [ag.id]
       );
 
       if (jaExecutouNesteHorario.rows.length > 0) continue;

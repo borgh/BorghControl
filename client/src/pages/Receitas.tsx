@@ -11,7 +11,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity, FileText, AlertTriangle, Clock, CalendarRange, Tag, X, CalendarDays } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingUp, Loader2, Repeat, Infinity, FileText, AlertTriangle, Clock, CalendarRange, Tag, X, CalendarDays, PiggyBank, Sparkles } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { AnexosBadge } from "@/components/AnexosBadge";
@@ -171,6 +171,7 @@ export default function Receitas() {
   const [dataInicio, setDataInicio] = useState<Date | undefined>(undefined);
   const [dataFim, setDataFim] = useState<Date | undefined>(undefined);
   const [calAberto, setCalAberto] = useState<"inicio" | "fim" | null>(null);
+  const [filtroInvestido, setFiltroInvestido] = useState<"todos" | "investido" | "nao_investido">("todos");
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [detalheItem, setDetalheItem] = useState<any>(null);
@@ -208,6 +209,14 @@ export default function Receitas() {
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };
 
+  const toggleInvestido = trpc.transacoes.toggleInvestido.useMutation({
+    onSuccess: (_, vars) => {
+      toast.success(vars.investido ? "✅ Marcado como investido!" : "Desmarcado como investido");
+      invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   const marcarPago = trpc.transacoes.marcarPago.useMutation({
     onSuccess: () => { toast.success("Marcado como recebido!"); invalidate(); },
     onError: (e) => toast.error(e.message),
@@ -230,11 +239,14 @@ export default function Receitas() {
 
   // Aplica filtro de "em atraso" ou "pendente puro" no frontend
   const filteredItems = useMemo(() => {
-    if (status === "em_atraso") return rawItems.filter((i: any) => isEmAtrasoReceita(i));
-    if (status === "pendente") return rawItems.filter((i: any) => i.status === "pendente" && !isEmAtrasoReceita(i));
-    if (status === "vence_em_breve") return rawItems.filter((i: any) => isVenceEmBreveReceita(i));
-    return rawItems;
-  }, [rawItems, status]);
+    let result = rawItems;
+    if (status === "em_atraso") result = result.filter((i: any) => isEmAtrasoReceita(i));
+    else if (status === "pendente") result = result.filter((i: any) => i.status === "pendente" && !isEmAtrasoReceita(i));
+    else if (status === "vence_em_breve") result = result.filter((i: any) => isVenceEmBreveReceita(i));
+    if (filtroInvestido === "investido") result = result.filter((i: any) => i.investido === true);
+    else if (filtroInvestido === "nao_investido") result = result.filter((i: any) => !i.investido);
+    return result;
+  }, [rawItems, status, filtroInvestido]);
 
   const items = useMemo(() => sortItems(filteredItems, ordem), [filteredItems, ordem]);
   const total = rawItems.reduce((s: number, i: any) => s + Number(i.valor), 0);
@@ -442,6 +454,19 @@ export default function Receitas() {
                     <SelectItem value="cancelado">Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
+                <Select value={filtroInvestido} onValueChange={(v) => setFiltroInvestido(v as any)}>
+                  <SelectTrigger className="h-9 text-xs w-44">
+                    <div className="flex items-center gap-1.5">
+                      <PiggyBank className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                      <SelectValue placeholder="Investimento" />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos</SelectItem>
+                    <SelectItem value="investido">✅ Investido</SelectItem>
+                    <SelectItem value="nao_investido">⏳ Não investido</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={filtroNF} onValueChange={(v) => setFiltroNF(v as any)}>
                   <SelectTrigger className="h-9 text-xs w-36"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -544,6 +569,20 @@ export default function Receitas() {
                                 Modificado: {new Date(item.updatedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
                             )}
+                            {/* Badge de investimento 10% */}
+                            {item.valorInvestir && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all ${
+                                  item.investido
+                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                    : "bg-amber-50 text-amber-700 border border-amber-200"
+                                }`}>
+                                  <PiggyBank className="h-2.5 w-2.5" />
+                                  <span>Investir: {fmt(Number(item.valorInvestir))}</span>
+                                  {item.investido && <Sparkles className="h-2.5 w-2.5" />}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
@@ -557,6 +596,22 @@ export default function Receitas() {
                             {item.status === "pago" && can("mark_paid") && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={() => marcarPendente.mutate({ id: item.id })} title="Marcar como pendente">
                                 <RotateCcw className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {/* Botão de investido — aparece quando há valorInvestir */}
+                            {item.valorInvestir && can("mark_paid") && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-7 w-7 transition-colors ${
+                                  item.investido
+                                    ? "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                                    : "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                                }`}
+                                onClick={() => toggleInvestido.mutate({ id: item.id, investido: !item.investido })}
+                                title={item.investido ? "Desmarcar como investido" : "Marcar 10% como investido"}
+                              >
+                                <PiggyBank className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             {can("edit_lancamentos") && (

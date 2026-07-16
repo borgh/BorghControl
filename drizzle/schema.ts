@@ -79,6 +79,8 @@ export const transacoes = pgTable(
     totalParcelas: integer("totalParcelas"),
     parcelaAtual: integer("parcelaAtual"),
     pagoEm: timestamp("pago_em"),
+    investido: boolean("investido").notNull().default(false),
+    valorInvestir: decimal("valor_investir", { precision: 12, scale: 2 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   },

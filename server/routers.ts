@@ -75,7 +75,7 @@ export const appRouter = router({
   }),
   transacoes: router({
     list: publicProcedure
-      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional(), emitirNF: z.boolean().optional(), prioridade: z.boolean().optional(), categoriaId: z.number().optional(), dataInicio: z.string().optional(), dataFim: z.string().optional() }).optional())
+      .input(z.object({ mes: z.number().min(1).max(12).optional(), ano: z.number().optional(), tipo: z.enum(["despesa", "receita"]).optional(), status: z.enum(["pendente", "pago", "cancelado"]).optional(), busca: z.string().optional(), limit: z.number().optional(), offset: z.number().optional(), emitirNF: z.boolean().optional(), prioridade: z.boolean().optional(), categoriaId: z.number().optional(), dataInicio: z.string().optional(), dataFim: z.string().optional(), investido: z.boolean().optional() }).optional())
       .query(async ({ input }) => listTransacoes(input ?? {})),
     getById: publicProcedure
       .input(z.object({ id: z.number() }))
@@ -192,6 +192,10 @@ export const appRouter = router({
     marcarPendente: permissionProcedure("mark_paid")
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => updateTransacao(input.id, { status: "pendente" })),
+    // Toggle investido: marcar/desmarcar 10% investido em receita
+    toggleInvestido: permissionProcedure("mark_paid")
+      .input(z.object({ id: z.number(), investido: z.boolean() }))
+      .mutation(async ({ input }) => updateTransacao(input.id, { investido: input.investido })),
   }),
   configuracoes: router({
     // Apenas admins podem gerenciar usuários

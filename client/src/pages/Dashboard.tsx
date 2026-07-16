@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock } from "lucide-react";
+import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock, PiggyBank, Sparkles } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -212,6 +212,8 @@ export default function Dashboard() {
         const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
         const totalPendenteReceitas = (rm as any)?.totalPendenteReceitas ?? 0;
         const saldoPendente = totalPendenteReceitas - totalPendenteReal;
+        const totalInvestido = (stats as any)?.totalInvestido ?? 0;
+        const contInvestidos = (stats as any)?.contInvestidos ?? 0;
         const hasAtraso = totalAtraso > 0;
         // Usa dados do backend para despesas que vencem em até 3 dias
         const venceEmBreve = stats?.venceEmBreve ?? [];
@@ -226,6 +228,7 @@ export default function Dashboard() {
             <StatCard title={mesFiltro === 0 ? "Saldo do Ano" : "Saldo do Mês"} value={fmt(rm?.saldo ?? 0)} icon={DollarSign} color={(rm?.saldo ?? 0) >= 0 ? "bg-primary" : "bg-orange-500"} trend={rm?.saldo} />
             <StatCard title="Pendentes a Pagar" value={fmt(totalPendenteReal)} icon={AlertCircle} color="bg-amber-500" sub={`${stats?.contadores?.pendentes ?? 0} lançamentos`} href="/despesas?status=pendente" />
             <StatCard title="Pendentes a Receber" value={fmt(totalPendenteReceitas)} icon={TrendingUp} color="bg-teal-500" sub={`${(stats?.contadores as any)?.pendentesReceitas ?? 0} lançamentos`} href="/receitas?status=pendente" />
+            <StatCard title="Total Investido" value={fmt(totalInvestido)} icon={PiggyBank} color="bg-violet-500" sub={`${contInvestidos} receita${contInvestidos !== 1 ? 's' : ''} investida${contInvestidos !== 1 ? 's' : ''}`} href="/receitas?investido=investido" />
             {hasAtraso && (
               <StatCard title="Em Atraso" value={fmt(totalAtraso)} icon={AlertTriangle} color="bg-red-600" sub="despesas vencidas" href="/despesas?status=em_atraso" />
             )}

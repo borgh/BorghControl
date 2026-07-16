@@ -184,6 +184,7 @@ export async function listTransacoes(params: {
   status?: "pendente" | "pago" | "cancelado"; busca?: string;
   limit?: number; offset?: number; emitirNF?: boolean; prioridade?: boolean;
   categoriaId?: number; dataInicio?: string; dataFim?: string;
+  investido?: boolean;
 }) {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
@@ -202,6 +203,7 @@ export async function listTransacoes(params: {
   if (params.emitirNF !== undefined) conditions.push(eq(transacoes.emitirNF, params.emitirNF));
   if (params.prioridade !== undefined) conditions.push(eq(transacoes.prioridade, params.prioridade));
   if (params.categoriaId !== undefined) conditions.push(eq(transacoes.categoriaId, params.categoriaId));
+  if (params.investido !== undefined) conditions.push(eq(transacoes.investido, params.investido));
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const limit = params.limit ?? 100;
   const offset = params.offset ?? 0;
@@ -218,6 +220,8 @@ export async function listTransacoes(params: {
       recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
       totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
       pagoEm: transacoes.pagoEm,
+      investido: transacoes.investido,
+      valorInvestir: transacoes.valorInvestir,
       createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
       categoriaNome: categorias.nome, categoriaCor: categorias.cor, categoriaIcone: categorias.icone,
     })
@@ -246,6 +250,8 @@ export async function getTransacaoById(id: number) {
     recorrenciaGrupoId: transacoes.recorrenciaGrupoId,
     totalParcelas: transacoes.totalParcelas, parcelaAtual: transacoes.parcelaAtual,
     pagoEm: transacoes.pagoEm,
+    investido: transacoes.investido,
+    valorInvestir: transacoes.valorInvestir,
     createdAt: transacoes.createdAt, updatedAt: transacoes.updatedAt,
     categoriaNome: categorias.nome, categoriaCor: categorias.cor,
   })
@@ -877,7 +883,19 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
     // contPendentesReceitas: apenas RECEITAS pendentes (contas a receber)
     if (t.tipo === "receita" && t.status === "pendente") contPendentesReceitas += Number(t.count);
   }
-  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes, pendentesReceitas: contPendentesReceitas } };
+
+  // Total investido: soma dos valor_investir de receitas marcadas como investido=true
+  const investidoWhere = todosMeses
+    ? and(eq(transacoes.ano, ano), eq(transacoes.tipo, "receita"), eq(transacoes.investido, true))
+    : and(eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.tipo, "receita"), eq(transacoes.investido, true));
+  const investidoResult = await db.select({
+    totalInvestido: sql<number>`COALESCE(SUM(CAST(${transacoes.valorInvestir} AS NUMERIC)), 0)`,
+    contInvestidos: sql<number>`COUNT(*)`,
+  }).from(transacoes).where(investidoWhere!);
+  const totalInvestido = Number(investidoResult[0]?.totalInvestido ?? 0);
+  const contInvestidos = Number(investidoResult[0]?.contInvestidos ?? 0);
+
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes, pendentesReceitas: contPendentesReceitas }, totalInvestido, contInvestidos };
 }
 
 export async function getAnosDisponiveis() {

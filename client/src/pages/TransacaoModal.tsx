@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList, FileText, Flame } from "lucide-react";
+import { Loader2, CalendarDays, Repeat, Hash, Infinity, FileEdit, ArrowRight, LayoutList, FileText, Flame, PiggyBank, Sparkles } from "lucide-react";
 
 interface TransacaoModalProps {
   open: boolean;
@@ -536,6 +536,27 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
               </div>
             )}
 
+            {/* Campo 10% para investir — somente receitas */}
+            {tipo === "receita" && form.valor && Number(form.valor) > 0 && (
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 px-4 py-3 select-none">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 flex-shrink-0">
+                  <PiggyBank className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-bold text-emerald-700">Investir 10%</p>
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-500" />
+                  </div>
+                  <p className="text-xs text-emerald-600/80">Guarde este valor para investimentos</p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-lg font-bold text-emerald-700 tabular-nums">
+                    {new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(form.valor) * 0.1)}
+                  </p>
+                  <p className="text-[10px] text-emerald-500 uppercase tracking-wide">10% do valor</p>
+                </div>
+              </div>
+            )}
             {/* Nota Fiscal (somente receitas) */}
             {tipo === "receita" && (
               <div

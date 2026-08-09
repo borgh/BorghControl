@@ -895,12 +895,22 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
   const totalInvestido = Number(investidoResult[0]?.totalInvestido ?? 0);
   const contInvestidos = Number(investidoResult[0]?.contInvestidos ?? 0);
 
-  // Saldo Pendente GERAL: soma de TODOS os lançamentos pendentes, de qualquer mês/ano
-  // (inclui tanto o que já está atrasado quanto o que ainda vai vencer). Independe do filtro de mês.
+  // Saldo Pendente GERAL: soma de tudo que está pendente ATÉ o mês/ano selecionado no filtro
+  // (inclui atrasados de qualquer época passada + o que vence dentro do mês/ano filtrado),
+  // mas NÃO inclui lançamentos de meses futuros além do filtro selecionado.
+  // "Todos os meses" (mes=0) considera o ano inteiro selecionado, sem cortar por mês.
+  const cutoffMes = todosMeses ? 12 : mes;
+  const pendenteGeralWhere = and(
+    eq(transacoes.status, "pendente"),
+    sql`(
+      (${transacoes.ano} < ${ano})
+      OR (${transacoes.ano} = ${ano} AND ${transacoes.mes} <= ${cutoffMes})
+    )`,
+  );
   const pendenteGeralResult = await db.select({
     tipo: transacoes.tipo,
     totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
-  }).from(transacoes).where(eq(transacoes.status, "pendente")).groupBy(transacoes.tipo);
+  }).from(transacoes).where(pendenteGeralWhere!).groupBy(transacoes.tipo);
   let totalPendenteDespesasGeral = 0, totalPendenteReceitasGeral = 0;
   for (const row of pendenteGeralResult) {
     const v = Number(row.totalValor);

@@ -270,7 +270,7 @@ export default function Dashboard() {
                         </button>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-64 text-xs">
-                        Considera <strong>todos</strong> os lançamentos pendentes, de qualquer mês — tanto o que já está atrasado quanto o que ainda vai vencer. Não é limitado ao mês selecionado no filtro.
+                        Considera tudo que está pendente <strong>até o mês/ano selecionado no filtro</strong> — atrasados de qualquer época + o que vence dentro do próprio mês filtrado. Não inclui lançamentos de meses futuros além do filtro.
                       </TooltipContent>
                     </UiTooltip>
                   </div>
@@ -285,7 +285,7 @@ export default function Dashboard() {
                       : saldoPendente < 0
                       ? "Você tem mais a pagar do que a receber"
                       : "Receber e pagar estão equilibrados"}
-                    {" "}· todos os meses (atrasado + a vencer)
+                    {" "}· até {mesFiltro === 0 ? anoFiltro : `${MESES[mesFiltro - 1]}/${anoFiltro}`} (atrasado + a vencer)
                   </p>
                 </div>
                 {/* Saldo Pendente apenas do mês/ano selecionado no filtro */}

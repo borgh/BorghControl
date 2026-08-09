@@ -64,6 +64,7 @@ $ESBUILD_BIN server/_core/index.prod.ts \
   --external:oracledb \
   --external:tedious \
   --external:sqlite3 \
+  --external:sharp \
   --log-level=warning 2>&1 | tail -5
 
 echo ">>> Verificando bundle..."

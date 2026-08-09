@@ -1,5 +1,19 @@
 #!/bin/bash
 set -e
+
+# IMPORTANTE: este script faz "git reset --hard" mais abaixo, o que sobrescreve
+# o próprio arquivo deploy.sh no disco enquanto o bash ainda está lendo dele.
+# Isso corrompe a execução (o bash pode "pular" trechos). Para evitar isso,
+# na primeira execução ele se copia para /tmp e reexecuta a cópia — só a
+# cópia em /tmp faz o trabalho de verdade, e ela nunca é tocada pelo git reset.
+if [ "${DEPLOY_REEXECUTED:-}" != "1" ]; then
+  TMP_SELF="$(mktemp /tmp/borghcontrol-deploy-XXXXXX.sh)"
+  cp "$0" "$TMP_SELF"
+  chmod +x "$TMP_SELF"
+  export DEPLOY_REEXECUTED=1
+  exec "$TMP_SELF" "$@"
+fi
+
 echo "=== BorghControl Deploy ==="
 echo "Iniciando deploy em: $(date)"
 

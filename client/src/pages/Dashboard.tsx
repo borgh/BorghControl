@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock, PiggyBank, Sparkles } from "lucide-react";
+import { TrendingDown, TrendingUp, AlertCircle, DollarSign, Calendar, ArrowUpRight, ArrowDownRight, AlertTriangle, Clock, PiggyBank, Sparkles, Info } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { TransacaoModal } from "./TransacaoModal";
 
@@ -211,7 +212,13 @@ export default function Dashboard() {
         const totalAtraso = rm?.totalAtraso ?? 0;
         const totalPendenteReal = (rm?.totalPendente ?? 0) - totalAtraso;
         const totalPendenteReceitas = (rm as any)?.totalPendenteReceitas ?? 0;
-        const saldoPendente = totalPendenteReceitas - totalPendenteReal;
+        // Saldo Pendente do MÊS/ANO selecionado no filtro do dashboard
+        const saldoPendenteMes = totalPendenteReceitas - totalPendenteReal;
+        // Saldo Pendente GERAL: todos os lançamentos pendentes, de qualquer mês/ano
+        // (atrasados + a vencer), independente do filtro selecionado
+        const totalPendenteDespesasGeral = (stats as any)?.totalPendenteDespesasGeral ?? 0;
+        const totalPendenteReceitasGeral = (stats as any)?.totalPendenteReceitasGeral ?? 0;
+        const saldoPendente = totalPendenteReceitasGeral - totalPendenteDespesasGeral;
         const totalInvestido = (stats as any)?.totalInvestido ?? 0;
         const contInvestidos = (stats as any)?.contInvestidos ?? 0;
         const hasAtraso = totalAtraso > 0;
@@ -237,7 +244,7 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Card de Saldo Pendente — discrepância entre a receber e a pagar */}
+          {/* Card de Saldo Pendente — discrepância entre a receber e a pagar (GERAL, todos os meses) */}
           <Card className={`border-2 transition-colors ${
             saldoPendente > 0 ? "border-emerald-200 bg-emerald-50/40" :
             saldoPendente < 0 ? "border-red-200 bg-red-50/40" :
@@ -254,7 +261,19 @@ export default function Dashboard() {
                     : <ArrowDownRight className="h-5 w-5 text-white" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saldo Pendente</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Saldo Pendente</p>
+                    <UiTooltip>
+                      <TooltipTrigger asChild>
+                        <button type="button" className="text-muted-foreground/60 hover:text-muted-foreground shrink-0">
+                          <Info className="h-3.5 w-3.5" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-64 text-xs">
+                        Considera <strong>todos</strong> os lançamentos pendentes, de qualquer mês — tanto o que já está atrasado quanto o que ainda vai vencer. Não é limitado ao mês selecionado no filtro.
+                      </TooltipContent>
+                    </UiTooltip>
+                  </div>
                   <p className={`text-xl sm:text-2xl font-bold tabular-nums ${
                     saldoPendente > 0 ? "text-emerald-700" : saldoPendente < 0 ? "text-red-600" : "text-foreground"
                   }`}>
@@ -266,18 +285,30 @@ export default function Dashboard() {
                       : saldoPendente < 0
                       ? "Você tem mais a pagar do que a receber"
                       : "Receber e pagar estão equilibrados"}
+                    {" "}· todos os meses (atrasado + a vencer)
+                  </p>
+                </div>
+                {/* Saldo Pendente apenas do mês/ano selecionado no filtro */}
+                <div className="text-right shrink-0 pl-3 border-l">
+                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                    {mesFiltro === 0 ? `Só ${anoFiltro}` : `Só ${MESES[mesFiltro - 1]}/${anoFiltro}`}
+                  </p>
+                  <p className={`text-sm sm:text-base font-bold tabular-nums ${
+                    saldoPendenteMes > 0 ? "text-emerald-700" : saldoPendenteMes < 0 ? "text-red-600" : "text-foreground"
+                  }`}>
+                    {saldoPendenteMes >= 0 ? "+" : ""}{fmt(saldoPendenteMes)}
                   </p>
                 </div>
               </div>
-              {/* Linha inferior: equação A Receber − A Pagar = Saldo */}
+              {/* Linha inferior: equação A Receber − A Pagar = Saldo (geral) */}
               <div className="grid grid-cols-3 gap-2 border-t pt-3">
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">A Receber</p>
-                  <p className="font-semibold text-teal-700 tabular-nums text-sm sm:text-base">{fmt(totalPendenteReceitas)}</p>
+                  <p className="font-semibold text-teal-700 tabular-nums text-sm sm:text-base">{fmt(totalPendenteReceitasGeral)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">A Pagar</p>
-                  <p className="font-semibold text-amber-700 tabular-nums text-sm sm:text-base">{fmt(totalPendenteReal)}</p>
+                  <p className="font-semibold text-amber-700 tabular-nums text-sm sm:text-base">{fmt(totalPendenteDespesasGeral)}</p>
                 </div>
                 <div className="text-center">
                   <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Discrepância</p>

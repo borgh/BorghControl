@@ -895,7 +895,20 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
   const totalInvestido = Number(investidoResult[0]?.totalInvestido ?? 0);
   const contInvestidos = Number(investidoResult[0]?.contInvestidos ?? 0);
 
-  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes, pendentesReceitas: contPendentesReceitas }, totalInvestido, contInvestidos };
+  // Saldo Pendente GERAL: soma de TODOS os lançamentos pendentes, de qualquer mês/ano
+  // (inclui tanto o que já está atrasado quanto o que ainda vai vencer). Independe do filtro de mês.
+  const pendenteGeralResult = await db.select({
+    tipo: transacoes.tipo,
+    totalValor: sql<number>`COALESCE(SUM(CAST(${transacoes.valor} AS NUMERIC)), 0)`,
+  }).from(transacoes).where(eq(transacoes.status, "pendente")).groupBy(transacoes.tipo);
+  let totalPendenteDespesasGeral = 0, totalPendenteReceitasGeral = 0;
+  for (const row of pendenteGeralResult) {
+    const v = Number(row.totalValor);
+    if (row.tipo === "despesa") totalPendenteDespesasGeral = v;
+    if (row.tipo === "receita") totalPendenteReceitasGeral = v;
+  }
+
+  return { resumoMensal: resumo, despesasPorCategoria: porCategoria, anuais, proximosVencimentosDespesas: vencimentosDespesas, proximosVencimentosReceitas: vencimentosReceitas, atrasoDespesas, atrasoReceitas, venceEmBreve, contadores: { despesas: contDespesas, receitas: contReceitas, pendentes: contPendentes, pendentesReceitas: contPendentesReceitas }, totalInvestido, contInvestidos, totalPendenteDespesasGeral, totalPendenteReceitasGeral };
 }
 
 export async function getAnosDisponiveis() {

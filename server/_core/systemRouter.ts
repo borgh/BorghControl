@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APP_VERSION } from "@shared/version";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 
@@ -12,6 +13,13 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
     })),
+
+  // Versão do código atualmente rodando no servidor (gerada pelo deploy.sh).
+  // O frontend compara com a versão embutida no build que carregou e,
+  // se forem diferentes, oferece um botão para atualizar.
+  version: publicProcedure.query(() => ({
+    version: APP_VERSION,
+  })),
 
   notifyOwner: adminProcedure
     .input(

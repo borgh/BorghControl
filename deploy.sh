@@ -24,6 +24,15 @@ fi
 
 cd "$REPO_DIR"
 
+echo ">>> Gravando versão do build (hash do commit)..."
+APP_VERSION_HASH="$(git rev-parse --short HEAD)"
+cat > shared/version.ts <<EOF
+// Este arquivo é sobrescrito automaticamente pelo deploy.sh a cada deploy,
+// com o hash curto do commit atual. Não editar manualmente em produção.
+export const APP_VERSION = "$APP_VERSION_HASH";
+EOF
+echo "Versão: $APP_VERSION_HASH"
+
 echo ">>> Verificando/instalando pnpm..."
 if ! command -v pnpm &> /dev/null; then
   echo "pnpm nao encontrado, instalando..."

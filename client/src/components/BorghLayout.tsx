@@ -8,9 +8,11 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
   Menu, LogOut, ChevronRight, DollarSign, X, Settings,
-  FolderOpen, Users, PieChart, FileText, ChevronDown, Database
+  FolderOpen, Users, PieChart, FileText, ChevronDown, Database,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -90,6 +92,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
   const [location, navigate] = useLocation();
   const initials = user?.name?.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase() ?? "BC";
+  const { updateAvailable, updateNow } = useVersionCheck();
 
   function goTo(path: string) {
     if (onClose) onClose();
@@ -143,12 +146,26 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-sidebar-accent transition-colors group">
-              <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">{initials}</AvatarFallback>
-              </Avatar>
+              <div className="relative shrink-0">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold">{initials}</AvatarFallback>
+                </Avatar>
+                {updateAvailable && (
+                  <span className="absolute -top-0.5 -right-0.5 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border-2 border-sidebar" />
+                  </span>
+                )}
+              </div>
               <div className="flex-1 text-left min-w-0">
                 <p className="text-xs font-semibold text-sidebar-foreground truncate">{user?.name ?? "Usuário"}</p>
-                <p className="text-xs text-sidebar-foreground/50 truncate">{user?.email ?? ""}</p>
+                <p className="text-xs text-sidebar-foreground/50 truncate">
+                  {updateAvailable ? (
+                    <span className="text-emerald-500 font-medium">Nova versão disponível</span>
+                  ) : (
+                    user?.email ?? ""
+                  )}
+                </p>
               </div>
             </button>
           </DropdownMenuTrigger>
@@ -157,6 +174,18 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
               {user?.name ?? "Usuário"}
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {updateAvailable && (
+              <>
+                <DropdownMenuItem
+                  onClick={updateNow}
+                  className="gap-2 cursor-pointer text-emerald-600 focus:text-emerald-600"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Nova versão disponível — Atualizar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
             {user?.role === "admin" && (
               <>
                 <DropdownMenuItem

@@ -9,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, isSameDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle, Clock, CalendarRange, Tag, X, CalendarDays } from "lucide-react";
+import { Plus, Search, Check, RotateCcw, Pencil, Trash2, TrendingDown, Loader2, Repeat, Infinity, Flame, AlertTriangle, Clock, CalendarRange, Tag, X, CalendarDays, CalendarCheck2 } from "lucide-react";
 import { TransacaoModal } from "./TransacaoModal";
 import { TransacaoDetalheModal } from "./TransacaoDetalheModal";
 import { AnexosBadge } from "@/components/AnexosBadge";
@@ -386,6 +386,20 @@ export default function Despesas() {
                     }`}
                   >
                     <CalendarRange className="h-3.5 w-3.5" /> Intervalo
+                  </button>
+                  <button
+                    onClick={() => {
+                      const hoje2 = new Date();
+                      setModoData("intervalo");
+                      setDataInicio(hoje2);
+                      setDataFim(hoje2);
+                    }}
+                    className={`px-3 py-1.5 flex items-center gap-1.5 transition-colors border-l border-border ${
+                      modoData === "intervalo" && dataInicio && dataFim && isSameDay(dataInicio, new Date()) && isSameDay(dataFim, new Date())
+                        ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <CalendarCheck2 className="h-3.5 w-3.5" /> Hoje
                   </button>
                 </div>
                 {modoData === "intervalo" && (dataInicio || dataFim) && (

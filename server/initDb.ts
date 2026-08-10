@@ -202,6 +202,7 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS pago_em TIMESTAMP;
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS dataVencimento DATE;
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS investido BOOLEAN NOT NULL DEFAULT false;
+        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS "bottomNavConfig" TEXT;
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transacoes' AND column_name='valor_investir') THEN
             ALTER TABLE transacoes ADD COLUMN valor_investir NUMERIC(12,2) GENERATED ALWAYS AS (ROUND(valor * 0.10, 2)) STORED;

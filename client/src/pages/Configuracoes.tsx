@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -13,7 +13,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil, CheckCircle2, XCircle } from "lucide-react";
+import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil, CheckCircle2, XCircle, Smartphone, GripVertical, ArrowUp, ArrowDown, X, Plus, Save, Menu } from "lucide-react";
+import { BOTTOM_NAV_REGISTRY, parseBottomNavConfig } from "@/lib/bottomNavRegistry";
+import { BOTTOM_NAV_MAX_ITEMS, type BottomNavItemKey } from "@shared/bottomNavItems";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", user: "Usuário" };
 const ROLE_COLORS: Record<string, string> = {
@@ -59,6 +61,149 @@ const PERMISSIONS: Permission[] = [
 const DEFAULT_USER_PERMS = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
 
 const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
+
+// Card de configuração do Menu Inferior (mobile) — preferência pessoal do usuário logado
+function MenuInferiorCard() {
+  const { user } = useAuth();
+  const utils = trpc.useUtils();
+  const [items, setItems] = useState<BottomNavItemKey[]>(() => parseBottomNavConfig(user?.bottomNavConfig));
+
+  useEffect(() => {
+    setItems(parseBottomNavConfig(user?.bottomNavConfig));
+  }, [user?.bottomNavConfig]);
+
+  const saveMutation = trpc.auth.updateBottomNavConfig.useMutation({
+    onSuccess: () => {
+      toast.success("Menu inferior atualizado!");
+      utils.auth.me.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const availableItems = Object.values(BOTTOM_NAV_REGISTRY).filter((i) => !items.includes(i.key));
+  const cheio = items.length >= BOTTOM_NAV_MAX_ITEMS;
+
+  function addItem(key: BottomNavItemKey) {
+    if (cheio) return;
+    setItems((prev) => [...prev, key]);
+  }
+  function removeItem(key: BottomNavItemKey) {
+    setItems((prev) => prev.filter((k) => k !== key));
+  }
+  function moveItem(index: number, dir: -1 | 1) {
+    setItems((prev) => {
+      const next = [...prev];
+      const target = index + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Smartphone className="h-4 w-4" />
+          Menu Inferior (celular)
+        </CardTitle>
+        <CardDescription>
+          Escolha até {BOTTOM_NAV_MAX_ITEMS} atalhos que aparecem fixos na parte de baixo da tela quando você acessa o BorghControl pelo celular — como um aplicativo de verdade. O botão <strong>Menu</strong> é sempre exibido por último e abre o menu lateral completo. É uma preferência pessoal — só muda a sua barra, não a dos outros usuários.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Botões selecionados */}
+        <div>
+          <p className="text-sm font-medium mb-2">Botões selecionados ({items.length}/{BOTTOM_NAV_MAX_ITEMS})</p>
+          {items.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4 border rounded-lg border-dashed">
+              Nenhum atalho selecionado — só o botão Menu vai aparecer na barra.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {items.map((key, i) => {
+                const def = BOTTOM_NAV_REGISTRY[key];
+                if (!def) return null;
+                const Icon = def.icon;
+                return (
+                  <div key={key} className="flex items-center gap-3 p-3 rounded-lg border bg-muted/20">
+                    <GripVertical className="h-4 w-4 text-muted-foreground/40 shrink-0" />
+                    <Icon className="h-4 w-4 text-primary shrink-0" />
+                    <span className="flex-1 text-sm font-medium truncate">{def.label}</span>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" disabled={i === 0} onClick={() => moveItem(i, -1)} title="Mover para cima">
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" disabled={i === items.length - 1} onClick={() => moveItem(i, 1)} title="Mover para baixo">
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => removeItem(key)} title="Remover">
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Adicionar */}
+        <div>
+          <p className="text-sm font-medium mb-1">Adicionar</p>
+          {cheio && (
+            <p className="text-xs text-muted-foreground mb-2">
+              Já tem {BOTTOM_NAV_MAX_ITEMS} selecionados — remova algum acima pra poder trocar por outro.
+            </p>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {availableItems.map((def) => {
+              const Icon = def.icon;
+              return (
+                <button
+                  key={def.key}
+                  type="button"
+                  disabled={cheio}
+                  onClick={() => addItem(def.key)}
+                  className="flex items-center gap-2 p-2.5 rounded-lg border text-sm text-left transition-colors disabled:opacity-40 disabled:cursor-not-allowed hover:bg-muted/40"
+                >
+                  <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <span className="flex-1 truncate">{def.label}</span>
+                  <Plus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Pré-visualização */}
+        <div>
+          <p className="text-sm font-medium mb-2">Pré-visualização</p>
+          <div className="flex items-stretch rounded-lg border overflow-hidden bg-background">
+            {items.map((key) => {
+              const def = BOTTOM_NAV_REGISTRY[key];
+              if (!def) return null;
+              const Icon = def.icon;
+              return (
+                <div key={key} className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-primary min-w-0">
+                  <Icon className="h-4 w-4" />
+                  <span className="text-[10px] font-medium truncate max-w-full px-1">{def.label}</span>
+                </div>
+              );
+            })}
+            <div className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-muted-foreground">
+              <Menu className="h-4 w-4" />
+              <span className="text-[10px] font-medium">Menu</span>
+            </div>
+          </div>
+        </div>
+
+        <Button onClick={() => saveMutation.mutate({ items })} disabled={saveMutation.isPending} className="gap-2 w-full sm:w-auto">
+          <Save className="h-4 w-4" />
+          {saveMutation.isPending ? "Salvando..." : "Salvar Menu Inferior"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Configuracoes() {
   const { user: currentUser } = useAuth();
@@ -147,18 +292,6 @@ export default function Configuracoes() {
     salvarPermissoesMutation.mutate({ permissions: userPermsTemp });
   }
 
-  if (currentUser?.role !== "admin") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <ShieldOff className="h-12 w-12 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">Acesso Restrito</h2>
-        <p className="text-muted-foreground text-sm text-center max-w-xs">
-          Esta área é exclusiva para administradores do sistema.
-        </p>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -168,14 +301,32 @@ export default function Configuracoes() {
             <Settings className="h-6 w-6 text-primary" />
             Configurações
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Gerencie usuários e permissões do sistema</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {currentUser?.role === "admin" ? "Gerencie usuários, permissões e suas preferências" : "Suas preferências pessoais"}
+          </p>
         </div>
-        <Button onClick={() => { setModalCriar(true); setForm(emptyForm); setShowPassword(false); }} className="gap-2">
-          <UserPlus className="h-4 w-4" />
-          Novo Usuário
-        </Button>
+        {currentUser?.role === "admin" && (
+          <Button onClick={() => { setModalCriar(true); setForm(emptyForm); setShowPassword(false); }} className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Novo Usuário
+          </Button>
+        )}
       </div>
 
+      {/* Menu Inferior (mobile) — preferência pessoal, disponível para qualquer usuário logado */}
+      <MenuInferiorCard />
+
+      {currentUser?.role !== "admin" && (
+        <div className="flex flex-col items-center justify-center py-10 gap-3 text-center">
+          <ShieldOff className="h-8 w-8 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Gerenciamento de usuários e permissões é exclusivo para administradores do sistema.
+          </p>
+        </div>
+      )}
+
+      {currentUser?.role === "admin" && (
+      <>
       {/* Usuários */}
       <Card>
         <CardHeader className="pb-3">
@@ -504,6 +655,8 @@ export default function Configuracoes() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      </>
+      )}
     </div>
   );
 }

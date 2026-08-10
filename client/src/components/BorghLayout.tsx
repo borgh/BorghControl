@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
+import MobileBottomNav from "@/components/MobileBottomNav";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -257,12 +258,14 @@ export default function BorghLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
         {/* Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-24 lg:pb-0">
           <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
             {children}
           </div>
         </main>
       </div>
+      {/* Menu inferior mobile (estilo app) */}
+      <MobileBottomNav onOpenMenu={() => setMobileOpen(true)} />
     </div>
   );
 }

@@ -82,6 +82,14 @@ export async function toggleUserAtivo(userId: number, ativo: boolean) {
   return { success: true };
 }
 
+// Preferência pessoal do menu inferior (mobile) — só afeta o próprio usuário
+export async function updateBottomNavConfig(userId: number, items: string[]) {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  await db.update(users).set({ bottomNavConfig: JSON.stringify(items), updatedAt: new Date() }).where(eq(users.id, userId));
+  return { success: true };
+}
+
 export async function deleteUser(userId: number) {
   const db = await getDb();
   if (!db) throw new Error("DB not available");

@@ -34,6 +34,7 @@ export const users = pgTable("users", {
   loginMethod: varchar("loginMethod", { length: 64 }),
   role: roleEnum("role").default("user").notNull(),
   ativo: boolean("ativo").default(true).notNull(),
+  bottomNavConfig: text("bottomNavConfig"), // JSON: array de chaves dos atalhos do menu inferior (mobile), preferência pessoal
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),

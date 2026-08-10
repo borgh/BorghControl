@@ -17,12 +17,13 @@ import {
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
   listUsers, updateUserRole, toggleUserAtivo, deleteUser, createUserByAdmin, updateUserByAdmin,
-  getUserPermissions, saveUserPermissions,
+  getUserPermissions, saveUserPermissions, updateBottomNavConfig,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
 import { Pool } from "pg";
 import { ENV } from "./_core/env";
+import { BOTTOM_NAV_ITEM_KEYS, BOTTOM_NAV_MAX_ITEMS } from "@shared/bottomNavItems";
 
 function getBackupPool() {
   const url = ENV.databaseUrl;
@@ -55,6 +56,13 @@ export const appRouter = router({
       ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
       return { success: true } as const;
     }),
+    // Preferência pessoal do menu inferior (mobile) — só afeta o próprio usuário logado
+    updateBottomNavConfig: protectedProcedure
+      .input(z.object({ items: z.array(z.enum(BOTTOM_NAV_ITEM_KEYS)).max(BOTTOM_NAV_MAX_ITEMS) }))
+      .mutation(async ({ input, ctx }) => {
+        await updateBottomNavConfig(ctx.user!.id, input.items);
+        return { success: true };
+      }),
   }),
   categorias: router({
     list: publicProcedure

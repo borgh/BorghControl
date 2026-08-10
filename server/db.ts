@@ -190,9 +190,25 @@ export async function listTransacoes(params: {
   if (!db) return { items: [], total: 0 };
   const conditions: any[] = [];
   // Se tiver intervalo de datas, filtra por dataVencimento; caso contrário usa mes/ano
+  // IMPORTANTE: lançamentos recorrentes ("Contrato") frequentemente não têm dataVencimento
+  // preenchida — só ano/mes/diaVencimento. Por isso usamos COALESCE para reconstruir a data
+  // efetiva a partir desses campos quando dataVencimento for nula, senão eles somem do filtro.
   if (params.dataInicio && params.dataFim) {
-    conditions.push(gte(transacoes.dataVencimento, params.dataInicio));
-    conditions.push(lte(transacoes.dataVencimento, params.dataFim));
+    const dataEfetiva = sql`COALESCE(
+      ${transacoes.dataVencimento}::text,
+      TO_CHAR(
+        MAKE_DATE(
+          ${transacoes.ano}, ${transacoes.mes},
+          LEAST(
+            COALESCE(${transacoes.diaVencimento}, 1),
+            EXTRACT(DAY FROM (DATE_TRUNC('month', MAKE_DATE(${transacoes.ano}, ${transacoes.mes}, 1)) + INTERVAL '1 month - 1 day'))::int
+          )
+        ),
+        'YYYY-MM-DD'
+      )
+    )`;
+    conditions.push(gte(dataEfetiva, params.dataInicio));
+    conditions.push(lte(dataEfetiva, params.dataFim));
   } else {
     if (params.mes) conditions.push(eq(transacoes.mes, params.mes));
     if (params.ano) conditions.push(eq(transacoes.ano, params.ano));

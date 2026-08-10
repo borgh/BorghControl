@@ -24,6 +24,7 @@ const trpcClient = trpc.createClient({
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+          cache: "no-store", // nunca usa cache HTTP do navegador (crítico para o system.version funcionar)
         });
       },
     }),

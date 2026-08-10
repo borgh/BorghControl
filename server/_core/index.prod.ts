@@ -72,6 +72,13 @@ async function startServer() {
   registerUploadProjetoRoutes(app);
   
   // tRPC API
+  // tRPC API — nunca deve ser cacheada pelo navegador (crítico para o
+  // system.version funcionar: sem isso, o navegador pode servir uma resposta
+  // antiga do cache HTTP em vez de checar o servidor de verdade)
+  app.use("/api/trpc", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    next();
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({

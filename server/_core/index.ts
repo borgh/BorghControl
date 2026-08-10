@@ -77,7 +77,11 @@ async function startServer() {
     }
   });
 
-  // tRPC API
+  // tRPC API — nunca deve ser cacheada pelo navegador
+  app.use("/api/trpc", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    next();
+  });
   app.use(
     "/api/trpc",
     createExpressMiddleware({

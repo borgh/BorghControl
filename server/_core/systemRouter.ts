@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { APP_VERSION } from "@shared/version";
+import { APP_VERSION, BUILD_DATE } from "@shared/version";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 
@@ -19,6 +19,7 @@ export const systemRouter = router({
   // se forem diferentes, oferece um botão para atualizar.
   version: publicProcedure.query(() => ({
     version: APP_VERSION,
+    buildDate: BUILD_DATE,
   })),
 
   notifyOwner: adminProcedure

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { APP_VERSION } from "@shared/version";
+import { APP_VERSION, BUILD_DATE } from "@shared/version";
 import { trpc } from "@/lib/trpc";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // verifica a cada 5 minutos
@@ -38,5 +38,5 @@ export function useVersionCheck() {
     window.location.reload();
   }
 
-  return { updateAvailable, currentVersion: APP_VERSION, updateNow };
+  return { updateAvailable, currentVersion: APP_VERSION, buildDate: BUILD_DATE, updateNow };
 }

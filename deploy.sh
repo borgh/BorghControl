@@ -40,12 +40,14 @@ cd "$REPO_DIR"
 
 echo ">>> Gravando versão do build (hash do commit)..."
 APP_VERSION_HASH="$(git rev-parse --short HEAD)"
+BUILD_DATE_STR="$(TZ='America/Sao_Paulo' date '+%d/%m/%Y %H:%M')"
 cat > shared/version.ts <<EOF
 // Este arquivo é sobrescrito automaticamente pelo deploy.sh a cada deploy,
-// com o hash curto do commit atual. Não editar manualmente em produção.
+// com o hash curto do commit atual e a data/hora do build. Não editar manualmente em produção.
 export const APP_VERSION = "$APP_VERSION_HASH";
+export const BUILD_DATE = "$BUILD_DATE_STR";
 EOF
-echo "Versão: $APP_VERSION_HASH"
+echo "Versão: $APP_VERSION_HASH ($BUILD_DATE_STR)"
 
 echo ">>> Verificando/instalando pnpm..."
 if ! command -v pnpm &> /dev/null; then

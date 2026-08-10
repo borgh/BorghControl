@@ -92,7 +92,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
   const { user, logout } = useAuth();
   const [location, navigate] = useLocation();
   const initials = user?.name?.split(" ").map((n: string) => n[0]).slice(0, 2).join("").toUpperCase() ?? "BC";
-  const { updateAvailable, updateNow } = useVersionCheck();
+  const { updateAvailable, updateNow, currentVersion, buildDate } = useVersionCheck();
 
   function goTo(path: string) {
     if (onClose) onClose();
@@ -166,6 +166,9 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
                     user?.email ?? ""
                   )}
                 </p>
+                <p className="text-[10px] text-sidebar-foreground/35 truncate mt-0.5">
+                  v{currentVersion}{buildDate ? ` · ${buildDate}` : ""}
+                </p>
               </div>
             </button>
           </DropdownMenuTrigger>
@@ -212,6 +215,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
               <LogOut className="h-4 w-4" />
               Sair
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <p className="px-2 py-1 text-[10px] text-muted-foreground/70">
+              Versão {currentVersion}{buildDate ? ` · ${buildDate}` : ""}
+            </p>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

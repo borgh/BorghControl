@@ -13,9 +13,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil, CheckCircle2, XCircle, Smartphone, GripVertical, ArrowUp, ArrowDown, X, Plus, Save, Menu } from "lucide-react";
+import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Pencil, CheckCircle2, XCircle, Smartphone, GripVertical, ArrowUp, ArrowDown, X, Plus, Save, Menu, Check, Palette } from "lucide-react";
 import { BOTTOM_NAV_REGISTRY, parseBottomNavConfig } from "@/lib/bottomNavRegistry";
 import { BOTTOM_NAV_MAX_ITEMS, type BottomNavItemKey } from "@shared/bottomNavItems";
+import { useTheme, THEME_OPTIONS } from "@/contexts/ThemeContext";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", user: "Usuário" };
 const ROLE_COLORS: Record<string, string> = {
@@ -61,6 +62,56 @@ const PERMISSIONS: Permission[] = [
 const DEFAULT_USER_PERMS = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
 
 const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
+
+// Card de seleção do tema de cores do sistema — preferência pessoal (salva no navegador)
+function TemaCard() {
+  const { theme, setTheme } = useTheme();
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Tema do Sistema
+        </CardTitle>
+        <CardDescription>
+          Escolha as cores do sistema. A mudança é aplicada na hora e fica salva só neste navegador.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {THEME_OPTIONS.map((opt) => {
+            const active = theme === opt.key;
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setTheme(opt.key)}
+                className={`relative flex flex-col rounded-xl border-2 overflow-hidden text-left transition-all ${
+                  active ? "border-primary shadow-sm" : "border-border hover:border-muted-foreground/30"
+                }`}
+              >
+                {active && (
+                  <div className="absolute top-1.5 right-1.5 h-5 w-5 rounded-full bg-primary flex items-center justify-center z-10">
+                    <Check className="h-3 w-3 text-primary-foreground" />
+                  </div>
+                )}
+                <div className="h-14 flex items-center justify-center gap-1.5" style={{ backgroundColor: opt.swatchBg }}>
+                  <span className="h-5 w-5 rounded-full shadow-sm" style={{ backgroundColor: opt.swatchPrimary }} />
+                  <span className="h-3 w-3 rounded-full opacity-60" style={{ backgroundColor: opt.dark ? "#3a4658" : "#00000022" }} />
+                </div>
+                <div className="p-2 bg-card">
+                  <p className="text-xs font-semibold">{opt.label}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{opt.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Card de configuração do Menu Inferior (mobile) — preferência pessoal do usuário logado
 function MenuInferiorCard() {
@@ -313,7 +364,8 @@ export default function Configuracoes() {
         )}
       </div>
 
-      {/* Menu Inferior (mobile) — preferência pessoal, disponível para qualquer usuário logado */}
+      {/* Tema do sistema + Menu Inferior (mobile) — preferências pessoais, disponíveis para qualquer usuário logado */}
+      <TemaCard />
       <MenuInferiorCard />
 
       {currentUser?.role !== "admin" && (

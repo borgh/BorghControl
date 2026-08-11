@@ -43,6 +43,16 @@
   </head>
 
   <body>
+    <script>
+      // Aplica o tema salvo ANTES do React montar, para evitar flash do tema padrão
+      (function () {
+        try {
+          var t = localStorage.getItem('borghcontrol-theme');
+          if (t === 'escuro') document.documentElement.classList.add('dark');
+          else if (t === 'azul' || t === 'roxo' || t === 'laranja') document.documentElement.classList.add('theme-' + t);
+        } catch (e) {}
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <!-- Registro do Service Worker -->

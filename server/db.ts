@@ -947,7 +947,11 @@ export async function getDashboardStats(mesParam?: number, anoParam?: number) {
 
 export async function getAnosDisponiveis() {
   const db = await getDb();
-  if (!db) return [new Date().getFullYear()];
+  const anoAtual = new Date().getFullYear();
+  if (!db) return [anoAtual, 2025];
   const result = await db.selectDistinct({ ano: transacoes.ano }).from(transacoes).orderBy(desc(transacoes.ano));
-  return result.map((r) => r.ano);
+  const anos = new Set(result.map((r) => r.ano));
+  anos.add(anoAtual);
+  anos.add(2025); // sempre disponível, mesmo sem lançamentos registrados nesse ano
+  return Array.from(anos).sort((a, b) => b - a);
 }

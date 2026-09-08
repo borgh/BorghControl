@@ -90,6 +90,7 @@ export const transacoes = pgTable(
     idxTipo: index("idx_tipo").on(table.tipo),
     idxStatus: index("idx_status").on(table.status),
     idxGrupo: index("idx_recorrencia_grupo").on(table.recorrenciaGrupoId),
+    idxDataVencimento: index("idx_data_vencimento").on(table.dataVencimento),
   })
 );
 

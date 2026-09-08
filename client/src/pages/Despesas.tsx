@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Button } from "@/components/ui/button";
@@ -197,7 +198,7 @@ export default function Despesas() {
   const dataInicioStr = dataInicio ? format(dataInicio, "yyyy-MM-dd") : undefined;
   const dataFimStr = dataFim ? format(dataFim, "yyyy-MM-dd") : undefined;
 
-  const { data, isLoading } = trpc.transacoes.list.useQuery({
+  const { data, isLoading, isFetching } = trpc.transacoes.list.useQuery({
     tipo: "despesa",
     mes: modoData === "mes" && mes !== "0" ? Number(mes) : undefined,
     ano: modoData === "mes" && ano !== "0" ? Number(ano) : undefined,
@@ -208,6 +209,8 @@ export default function Despesas() {
     prioridade: filtroPrioridade === "sim" ? true : filtroPrioridade === "nao" ? false : undefined,
     categoriaId: categoriaFiltro !== "todas" ? Number(categoriaFiltro) : undefined,
     limit: queryLimit,
+  }, {
+    placeholderData: keepPreviousData, // mantém a lista anterior na tela durante o refetch, evita flash de "0 lançamentos"
   });
 
   const invalidate = () => { utils.transacoes.list.invalidate(); utils.relatorios.dashboard.invalidate(); };
@@ -275,7 +278,10 @@ export default function Despesas() {
           </div>
           <div>
             <h1 className="text-xl font-bold">Contas a Pagar</h1>
-            <p className="text-xs text-muted-foreground">{items.length} lançamentos</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              {items.length} lançamentos
+              {isFetching && !isLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+            </p>
           </div>
         </div>
         {can("create_lancamentos") && (

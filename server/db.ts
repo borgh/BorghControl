@@ -197,29 +197,32 @@ export async function listTransacoes(params: {
   const db = await getDb();
   if (!db) return { items: [], total: 0 };
   const conditions: any[] = [];
-  // Se tiver intervalo de datas, filtra por dataVencimento; caso contrário usa mes/ano
-  // IMPORTANTE: lançamentos recorrentes ("Contrato") frequentemente não têm dataVencimento
-  // preenchida — só ano/mes/diaVencimento. Por isso usamos COALESCE para reconstruir a data
-  // efetiva a partir desses campos quando dataVencimento for nula, senão eles somem do filtro.
+  // A data "efetiva" de vencimento: usa dataVencimento quando preenchida, senão reconstrói
+  // a partir de ano+mes+diaVencimento (lançamentos recorrentes/"Contrato" geralmente não
+  // preenchem dataVencimento). Usada em TODOS os modos de filtro de data (Mês/Ano, Intervalo,
+  // Hoje) para que o filtro sempre reflita o vencimento real, e não a competência (mes/ano
+  // brutos) — que pode ser um mês diferente do vencimento (ex: competência Setembro,
+  // vencimento 01/Outubro).
+  const dataEfetiva = sql`COALESCE(
+    ${transacoes.dataVencimento}::text,
+    TO_CHAR(
+      MAKE_DATE(
+        ${transacoes.ano}, ${transacoes.mes},
+        LEAST(
+          COALESCE(${transacoes.diaVencimento}, 1),
+          EXTRACT(DAY FROM (DATE_TRUNC('month', MAKE_DATE(${transacoes.ano}, ${transacoes.mes}, 1)) + INTERVAL '1 month - 1 day'))::int
+        )
+      ),
+      'YYYY-MM-DD'
+    )
+  )`;
+  // Se tiver intervalo de datas, filtra pelo intervalo; caso contrário usa mês/ano do vencimento
   if (params.dataInicio && params.dataFim) {
-    const dataEfetiva = sql`COALESCE(
-      ${transacoes.dataVencimento}::text,
-      TO_CHAR(
-        MAKE_DATE(
-          ${transacoes.ano}, ${transacoes.mes},
-          LEAST(
-            COALESCE(${transacoes.diaVencimento}, 1),
-            EXTRACT(DAY FROM (DATE_TRUNC('month', MAKE_DATE(${transacoes.ano}, ${transacoes.mes}, 1)) + INTERVAL '1 month - 1 day'))::int
-          )
-        ),
-        'YYYY-MM-DD'
-      )
-    )`;
     conditions.push(gte(dataEfetiva, params.dataInicio));
     conditions.push(lte(dataEfetiva, params.dataFim));
   } else {
-    if (params.mes) conditions.push(eq(transacoes.mes, params.mes));
-    if (params.ano) conditions.push(eq(transacoes.ano, params.ano));
+    if (params.mes) conditions.push(sql`EXTRACT(MONTH FROM (${dataEfetiva})::date) = ${params.mes}`);
+    if (params.ano) conditions.push(sql`EXTRACT(YEAR FROM (${dataEfetiva})::date) = ${params.ano}`);
   }
   if (params.tipo) conditions.push(eq(transacoes.tipo, params.tipo));
   if (params.status) conditions.push(eq(transacoes.status, params.status));

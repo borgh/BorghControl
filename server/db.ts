@@ -551,26 +551,51 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   // ─── ESCOPO: este_e_futuros (padrão) ─────────────────────────────────────
   // Recorrente: determinar grupoId (reutilizar existente ou criar novo)
   const grupoId = registroAtual.recorrenciaGrupoId ?? randomUUID();
+  // IMPORTANTE: a parcela editada pode ser qualquer posição da série (não só a 1ª).
+  // Preservamos a posição original dela — do contrário, editar por exemplo a parcela
+  // 3/5 fazia o sistema tratá-la como se fosse a parcela 1 de um plano novo, gerando
+  // parcelas extras duplicadas (2/5, 3/5, 4/5, 5/5) por cima das que já existiam.
+  const parcelaAtualOriginal = registroAtual.parcelaAtual ?? 1;
+
+  // Buscar todas as parcelas existentes do grupo, para validar o total de parcelas
+  let parcelasExistentes: typeof registroAtual[] = [];
+  if (registroAtual.recorrenciaGrupoId) {
+    parcelasExistentes = await db.select().from(transacoes)
+      .where(eq(transacoes.recorrenciaGrupoId, registroAtual.recorrenciaGrupoId));
+  }
+  const maiorParcelaExistente = parcelasExistentes.reduce(
+    (max, t) => Math.max(max, t.parcelaAtual ?? 1),
+    parcelaAtualOriginal
+  );
+
+  // Não permite reduzir o total de parcelas abaixo do que já foi criado
+  if (data.totalParcelas != null && data.totalParcelas < maiorParcelaExistente) {
+    throw new Error(
+      `Não é possível reduzir para ${data.totalParcelas} parcela(s): já existem ${maiorParcelaExistente} parcelas criadas neste parcelamento. Exclua as parcelas extras manualmente antes de reduzir o total.`
+    );
+  }
 
   // Se já havia parcelas futuras deste grupo, deletar a partir do mês seguinte
+  // (protege parcelas já PAGAS de serem apagadas por engano nesse processo)
   if (registroAtual.recorrenciaGrupoId) {
-    const proximoMes = data.mes === 12 ? 1 : data.mes + 1;
-    const proximoAno = data.mes === 12 ? data.ano + 1 : data.ano;
     await db.delete(transacoes).where(
       and(
         eq(transacoes.recorrenciaGrupoId, registroAtual.recorrenciaGrupoId),
         sql`(${transacoes.ano} > ${data.ano} OR (${transacoes.ano} = ${data.ano} AND ${transacoes.mes} > ${data.mes}))`,
-        sql`${transacoes.id} != ${id}`
+        sql`${transacoes.id} != ${id}`,
+        sql`${transacoes.status} != 'pago'`
       )
     );
   }
 
-  // Determinar quantos meses gerar à frente (excluindo o mês atual que já existe)
-  const mesesParaGerar = data.totalParcelas == null ? 24 : (data.totalParcelas - 1);
+  // Quantas parcelas futuras faltam gerar a partir desta (relativo à posição real
+  // da parcela editada — só gera parcelas NOVAS se o total foi aumentado além do
+  // que já existia; se o total não mudou, gera exatamente as que faltavam antes)
+  const mesesParaGerar = data.totalParcelas == null ? 24 : Math.max(0, data.totalParcelas - parcelaAtualOriginal);
 
-  // Atualizar o registro atual (parcela 1)
+  // Atualizar o registro atual (mantendo sua própria posição na série)
   await db.update(transacoes).set({
-    descricao: data.totalParcelas != null ? `${data.descricao} (1/${data.totalParcelas})` : data.descricao,
+    descricao: data.totalParcelas != null ? `${data.descricao} (${parcelaAtualOriginal}/${data.totalParcelas})` : data.descricao,
     valor: data.valor,
     tipo: data.tipo,
     status: data.status,
@@ -587,16 +612,17 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
     prioridade: data.prioridade ?? false,
     recorrenciaGrupoId: grupoId,
     totalParcelas: data.totalParcelas ?? null,
-    parcelaAtual: 1,
+    parcelaAtual: parcelaAtualOriginal,
     updatedAt: new Date(),
   }).where(eq(transacoes.id, id));
 
-  // Gerar parcelas futuras
+  // Gerar as parcelas futuras que ainda faltam, numeradas a partir da posição real
   const registros: InsertTransacao[] = [];
   for (let i = 1; i <= mesesParaGerar; i++) {
     const totalMes = (data.mes - 1) + i;
     const mesParcela = (totalMes % 12) + 1;
     const anoParcela = data.ano + Math.floor(totalMes / 12);
+    const numeroParcela = parcelaAtualOriginal + i;
 
     let dataVencimentoParcela: string | null = null;
     if (data.dataVencimento) {
@@ -610,7 +636,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
 
     registros.push({
       descricao: data.totalParcelas != null
-        ? `${data.descricao} (${i + 1}/${data.totalParcelas})`
+        ? `${data.descricao} (${numeroParcela}/${data.totalParcelas})`
         : data.descricao,
       valor: data.valor,
       tipo: data.tipo,
@@ -628,7 +654,7 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
       prioridade: data.prioridade ?? false,
       recorrenciaGrupoId: grupoId,
       totalParcelas: data.totalParcelas ?? null,
-      parcelaAtual: i + 1,
+      parcelaAtual: numeroParcela,
     });
   }
 

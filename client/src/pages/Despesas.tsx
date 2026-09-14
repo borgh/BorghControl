@@ -178,8 +178,8 @@ export default function Despesas() {
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [detalheItem, setDetalheItem] = useState<any>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string } | null>(null);
-  const [deleteMode, setDeleteMode] = useState<"single" | "group">("single");
+  const [deleteTarget, setDeleteTarget] = useState<{ id: number; grupoId?: string; mes: number; ano: number } | null>(null);
+  const [deleteMode, setDeleteMode] = useState<"single" | "futuro" | "group">("single");
 
   const utils = trpc.useUtils();
   const { data: anosData } = trpc.relatorios.anosDisponiveis.useQuery();
@@ -228,7 +228,11 @@ export default function Despesas() {
     onError: (e) => toast.error(e.message),
   });
   const deleteGrupoMut = trpc.transacoes.deleteGrupo.useMutation({
-    onSuccess: () => { toast.success("Série excluída!"); invalidate(); setDeleteTarget(null); },
+    onSuccess: () => {
+      toast.success(deleteMode === "futuro" ? "Esta e as parcelas futuras foram excluídas!" : "Série excluída!");
+      invalidate();
+      setDeleteTarget(null);
+    },
     onError: (e) => toast.error(e.message),
   });
 
@@ -253,7 +257,7 @@ export default function Despesas() {
   const totalVenceEmBreve = itensVenceEmBreve.reduce((s: number, i: any) => s + Number(i.valor), 0);
 
   const handleDeleteClick = (item: any) => {
-    setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId });
+    setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId, mes: item.mes, ano: item.ano });
     setDeleteMode("single");
   };
 
@@ -261,6 +265,8 @@ export default function Despesas() {
     if (!deleteTarget) return;
     if (deleteMode === "group" && deleteTarget.grupoId) {
       deleteGrupoMut.mutate({ grupoId: deleteTarget.grupoId });
+    } else if (deleteMode === "futuro" && deleteTarget.grupoId) {
+      deleteGrupoMut.mutate({ grupoId: deleteTarget.grupoId, aPartirDe: { mes: deleteTarget.mes, ano: deleteTarget.ano } });
     } else {
       deleteMut.mutate({ id: deleteTarget.id });
     }
@@ -644,6 +650,13 @@ export default function Despesas() {
                 </div>
               </label>
               <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
+                <input type="radio" name="deleteModeDespesa" checked={deleteMode === "futuro"} onChange={() => setDeleteMode("futuro")} className="mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Este e os futuros</p>
+                  <p className="text-xs text-muted-foreground">Remove esta parcela e todas as seguintes, mantendo as anteriores.</p>
+                </div>
+              </label>
+              <label className="flex items-start gap-3 cursor-pointer rounded-lg border p-3 hover:bg-muted/40 transition-colors">
                 <input type="radio" name="deleteModeDespesa" checked={deleteMode === "group"} onChange={() => setDeleteMode("group")} className="mt-0.5" />
                 <div>
                   <p className="text-sm font-medium">Toda a série</p>
@@ -655,7 +668,7 @@ export default function Despesas() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {deleteMode === "group" ? "Excluir Toda a Série" : "Excluir"}
+              {deleteMode === "group" ? "Excluir Toda a Série" : deleteMode === "futuro" ? "Excluir Este e os Futuros" : "Excluir"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

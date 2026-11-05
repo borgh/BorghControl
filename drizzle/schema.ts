@@ -220,3 +220,26 @@ export const backupLogs = pgTable("backup_logs", {
   finalizadoEm: timestamp("finalizado_em"),
 });
 export type BackupLog = typeof backupLogs.$inferSelect;
+
+// ─── Metas de poupança ──────────────────────────────────────────────────────────
+export const metas = pgTable("metas", {
+  id: serial("id").primaryKey(),
+  nome: varchar("nome", { length: 150 }).notNull(),
+  valorAlvo: decimal("valor_alvo", { precision: 12, scale: 2 }).notNull(),
+  prazo: date("prazo"),                       // data-alvo (opcional)
+  cor: varchar("cor", { length: 7 }).default("#10b981"),
+  icone: varchar("icone", { length: 50 }).default("target"),
+  concluida: boolean("concluida").notNull().default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export const metaAportes = pgTable("meta_aportes", {
+  id: serial("id").primaryKey(),
+  metaId: integer("meta_id").notNull(),
+  valor: decimal("valor", { precision: 12, scale: 2 }).notNull(),
+  data: date("data").notNull(),
+  observacao: text("observacao"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+export type Meta = typeof metas.$inferSelect;
+export type MetaAporte = typeof metaAportes.$inferSelect;

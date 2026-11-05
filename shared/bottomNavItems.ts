@@ -10,6 +10,7 @@ export const BOTTOM_NAV_ITEM_KEYS = [
   "socios",
   "projetos-dashboard",
   "projetos-relatorios",
+  "metas",
   "backup",
   "configuracoes",
 ] as const;

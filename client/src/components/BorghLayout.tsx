@@ -9,7 +9,7 @@ import {
   LayoutDashboard, TrendingDown, TrendingUp, Tag, BarChart3,
   Menu, LogOut, ChevronRight, DollarSign, X, Settings,
   FolderOpen, Users, PieChart, FileText, ChevronDown, Database,
-  RefreshCw
+  RefreshCw, Target
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVersionCheck } from "@/hooks/useVersionCheck";
@@ -21,6 +21,7 @@ const navItems = [
   { href: "/receitas", label: "Contas a Receber", icon: TrendingUp },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
   { href: "/categorias", label: "Categorias", icon: Tag },
+  { href: "/metas", label: "Metas", icon: Target },
 ];
 
 const projetosSubItems = [

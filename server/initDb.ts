@@ -255,6 +255,28 @@ export async function initDatabase(): Promise<void> {
         GROUP BY t."recorrenciaGrupoId"
         ON CONFLICT ("grupoId") DO NOTHING;
 
+        -- Metas de poupança
+        CREATE TABLE IF NOT EXISTS metas (
+          id SERIAL PRIMARY KEY,
+          nome VARCHAR(150) NOT NULL,
+          valor_alvo NUMERIC(12,2) NOT NULL,
+          prazo DATE,
+          cor VARCHAR(7) DEFAULT '#10b981',
+          icone VARCHAR(50) DEFAULT 'target',
+          concluida BOOLEAN NOT NULL DEFAULT false,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE TABLE IF NOT EXISTS meta_aportes (
+          id SERIAL PRIMARY KEY,
+          meta_id INTEGER NOT NULL REFERENCES metas(id) ON DELETE CASCADE,
+          valor NUMERIC(12,2) NOT NULL,
+          data DATE NOT NULL,
+          observacao TEXT,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_meta_aportes_meta ON meta_aportes (meta_id);
+
         -- Regra 50-30-20: grupo de orçamento nas categorias (classificação inicial feita UMA vez)
         ALTER TABLE IF EXISTS categorias ADD COLUMN IF NOT EXISTS grupo_orcamento VARCHAR(20) NOT NULL DEFAULT 'essencial';
         DO $$ BEGIN

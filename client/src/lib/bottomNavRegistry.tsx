@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, TrendingDown, TrendingUp, BarChart3, Tag,
-  FolderOpen, Users, PieChart, FileText, Database, Settings,
+  FolderOpen, Users, PieChart, FileText, Database, Settings, Target,
 } from "lucide-react";
 import { BOTTOM_NAV_ITEM_KEYS, type BottomNavItemKey } from "@shared/bottomNavItems";
 
@@ -21,6 +21,7 @@ export const BOTTOM_NAV_REGISTRY: Record<BottomNavItemKey, BottomNavItemDef> = {
   socios: { key: "socios", label: "Sócios", href: "/projetos/socios", icon: Users },
   "projetos-dashboard": { key: "projetos-dashboard", label: "Dashboard Investimentos", href: "/projetos/dashboard", icon: PieChart },
   "projetos-relatorios": { key: "projetos-relatorios", label: "Relatórios Investimentos", href: "/projetos/relatorios", icon: FileText },
+  metas: { key: "metas", label: "Metas", href: "/metas", icon: Target },
   backup: { key: "backup", label: "Backup", href: "/backup", icon: Database },
   configuracoes: { key: "configuracoes", label: "Configurações", href: "/configuracoes", icon: Settings },
 };

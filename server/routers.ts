@@ -23,6 +23,7 @@ import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
 import { Pool } from "pg";
 import { ENV } from "./_core/env";
+import { listMetas, createMeta, updateMeta, deleteMeta, listAportes, createAporte, deleteAporte } from "./metas";
 import { getMetaFinanceira, getFluxoCaixa, getScoreSaude, getLembreteSalario, separarPoupanca } from "./orcamento";
 import { listarAvisosTermino, renovarRecorrencia, tornarIndeterminada, dispensarAviso, getRecorrencia, manterJanelaIndeterminadas } from "./recorrencias";
 import { BOTTOM_NAV_ITEM_KEYS, BOTTOM_NAV_MAX_ITEMS } from "@shared/bottomNavItems";
@@ -384,6 +385,27 @@ export const appRouter = router({
     separarPoupanca: permissionProcedure("mark_paid")
       .input(z.object({ ids: z.array(z.number()).min(1) }))
       .mutation(async ({ input }) => separarPoupanca(input.ids)),
+  }),
+  metas: router({
+    list: protectedProcedure.query(async () => listMetas()),
+    create: permissionProcedure("create_lancamentos")
+      .input(z.object({ nome: z.string().min(1).max(150), valorAlvo: z.number().positive(), prazo: z.string().nullable().optional(), cor: z.string().optional() }))
+      .mutation(async ({ input }) => createMeta({ ...input, valorAlvo: String(input.valorAlvo) })),
+    update: permissionProcedure("edit_lancamentos")
+      .input(z.object({ id: z.number(), nome: z.string().min(1).max(150).optional(), valorAlvo: z.number().positive().optional(), prazo: z.string().nullable().optional(), cor: z.string().optional(), concluida: z.boolean().optional() }))
+      .mutation(async ({ input }) => { const { id, valorAlvo, ...rest } = input; return updateMeta(id, { ...rest, ...(valorAlvo !== undefined ? { valorAlvo: String(valorAlvo) } : {}) }); }),
+    delete: permissionProcedure("delete_lancamentos")
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteMeta(input.id)),
+    aportes: protectedProcedure
+      .input(z.object({ metaId: z.number() }))
+      .query(async ({ input }) => listAportes(input.metaId)),
+    aportar: permissionProcedure("create_lancamentos")
+      .input(z.object({ metaId: z.number(), valor: z.number().positive(), data: z.string(), observacao: z.string().optional() }))
+      .mutation(async ({ input }) => createAporte({ ...input, valor: String(input.valor) })),
+    removerAporte: permissionProcedure("delete_lancamentos")
+      .input(z.object({ id: z.number() }))
+      .mutation(async ({ input }) => deleteAporte(input.id)),
   }),
   recorrencias: router({
     // Dados da série de um lançamento (prazo, indeterminada, fim)

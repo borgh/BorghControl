@@ -2,7 +2,7 @@ import { eq, and, or, desc, sql, ilike, gte, lte } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
-import { users, categorias, transacoes, systemConfig, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
+import { users, categorias, transacoes, systemConfig, recorrencias, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -298,10 +298,39 @@ export async function createTransacao(data: InsertTransacao) {
 
 /**
  * Cria uma transação com recorrência:
- * - recorrente=true + totalParcelas=null → permanente (gera 24 meses à frente)
- * - recorrente=true + totalParcelas=N → gera N parcelas mensais
+ * - recorrente=true + totalParcelas=N → parcelado: gera N parcelas mensais
+ * - recorrente=true + totalParcelas=null → contrato mensal:
+ *     - indeterminada=true → PARA SEMPRE: gera JANELA_MESES à frente e a rotina diária
+ *       mantém a janela sempre completa
+ *     - prazoMeses=12|24 → gera exatamente esse número de meses (aviso ao se aproximar do fim)
  * - recorrente=false → cria apenas uma transação
  */
+const JANELA_MESES_INDETERMINADA = 12;
+
+function somarMesesDb(mes: number, ano: number, n: number) {
+  const total = (ano * 12 + (mes - 1)) + n;
+  return { mes: (total % 12) + 1, ano: Math.floor(total / 12) };
+}
+function mesesEntreDb(a: { mes: number; ano: number }, b: { mes: number; ano: number }) {
+  return (b.ano * 12 + (b.mes - 1)) - (a.ano * 12 + (a.mes - 1));
+}
+function alvoJanelaDb() {
+  const hoje = new Date();
+  return somarMesesDb(hoje.getMonth() + 1, hoje.getFullYear(), JANELA_MESES_INDETERMINADA);
+}
+
+async function salvarRecorrencia(data: {
+  grupoId: string; tipo: "parcelado" | "contrato"; prazoMeses: number | null;
+  indeterminada: boolean; mesFim: number | null; anoFim: number | null;
+}) {
+  const db = await getDb();
+  if (!db) return;
+  await db.insert(recorrencias).values({ ...data, avisoDispensado: false }).onConflictDoUpdate({
+    target: recorrencias.grupoId,
+    set: { tipo: data.tipo, prazoMeses: data.prazoMeses, indeterminada: data.indeterminada, mesFim: data.mesFim, anoFim: data.anoFim, avisoDispensado: false, updatedAt: new Date() },
+  });
+}
+
 export async function createTransacaoComRecorrencia(data: {
   descricao: string;
   valor: string;
@@ -316,7 +345,9 @@ export async function createTransacaoComRecorrencia(data: {
   formaPagamento?: string;
   observacao?: string;
   recorrente: boolean;
-  totalParcelas?: number | null; // null = permanente, N = parcelas
+  totalParcelas?: number | null; // null = contrato mensal, N = parcelas
+  prazoMeses?: 12 | 24 | null;   // contrato: prazo em meses (ignorado se indeterminada)
+  indeterminada?: boolean;       // contrato: sem fim
   emitirNF?: boolean;
   prioridade?: boolean;
 }) {
@@ -350,7 +381,18 @@ export async function createTransacaoComRecorrencia(data: {
 
   // Recorrente: gerar série de parcelas
   const grupoId = randomUUID();
-  const mesesParaGerar = data.totalParcelas == null ? 24 : data.totalParcelas;
+  const ehParcelado = data.totalParcelas != null;
+  const indeterminada = !ehParcelado && !!data.indeterminada;
+  const prazoContrato = data.prazoMeses === 12 ? 12 : 24;
+  let mesesParaGerar: number;
+  if (ehParcelado) {
+    mesesParaGerar = data.totalParcelas!;
+  } else if (indeterminada) {
+    // Gera até hoje+12 meses (no mínimo 1, caso o início seja no futuro)
+    mesesParaGerar = Math.max(1, mesesEntreDb({ mes: data.mes, ano: data.ano }, alvoJanelaDb()) + 1);
+  } else {
+    mesesParaGerar = prazoContrato;
+  }
   const registros: InsertTransacao[] = [];
 
   for (let i = 0; i < mesesParaGerar; i++) {
@@ -396,6 +438,15 @@ export async function createTransacaoComRecorrencia(data: {
   }
 
   const result = await db.insert(transacoes).values(registros).returning();
+  const fim = somarMesesDb(data.mes, data.ano, mesesParaGerar - 1);
+  await salvarRecorrencia({
+    grupoId,
+    tipo: ehParcelado ? "parcelado" : "contrato",
+    prazoMeses: ehParcelado ? data.totalParcelas! : (indeterminada ? null : prazoContrato),
+    indeterminada,
+    mesFim: fim.mes,
+    anoFim: fim.ano,
+  });
   return { created: result, grupoId };
 }
 
@@ -407,8 +458,9 @@ export async function deleteRecorrenciaGrupo(grupoId: string, aPartirDe?: { mes:
   if (!db) throw new Error("DB unavailable");
 
   if (!aPartirDe) {
-    // Deletar todas as parcelas do grupo
+    // Deletar todas as parcelas do grupo (e o registro da série)
     await db.delete(transacoes).where(eq(transacoes.recorrenciaGrupoId, grupoId));
+    await db.delete(recorrencias).where(eq(recorrencias.grupoId, grupoId));
   } else {
     // Deletar apenas as parcelas futuras (a partir do mês/ano especificado)
     await db.delete(transacoes).where(
@@ -417,6 +469,16 @@ export async function deleteRecorrenciaGrupo(grupoId: string, aPartirDe?: { mes:
         sql`(${transacoes.ano} > ${aPartirDe.ano} OR (${transacoes.ano} = ${aPartirDe.ano} AND ${transacoes.mes} >= ${aPartirDe.mes}))`
       )
     );
+    // A série passa a terminar no mês anterior. Se era indeterminada, deixa de ser —
+    // senão a rotina diária regeraria exatamente o que o usuário acabou de excluir.
+    const fim = somarMesesDb(aPartirDe.mes, aPartirDe.ano, -1);
+    const restantes = await db.select({ n: sql<number>`count(*)` }).from(transacoes).where(eq(transacoes.recorrenciaGrupoId, grupoId));
+    if (Number(restantes[0]?.n ?? 0) === 0) {
+      await db.delete(recorrencias).where(eq(recorrencias.grupoId, grupoId));
+    } else {
+      await db.update(recorrencias).set({ mesFim: fim.mes, anoFim: fim.ano, indeterminada: false, avisoDispensado: true, updatedAt: new Date() })
+        .where(eq(recorrencias.grupoId, grupoId));
+    }
   }
 }
 
@@ -457,6 +519,8 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   observacao?: string;
   recorrente: boolean;
   totalParcelas?: number | null;
+  prazoMeses?: 12 | 24 | null;   // contrato: só considerado se informado (muda o prazo da série)
+  indeterminada?: boolean;       // contrato: só considerado se informado
   escopo?: "apenas_este" | "este_e_futuros" | "todos";
   emitirNF?: boolean;
   prioridade?: boolean;
@@ -591,7 +655,51 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   // Quantas parcelas futuras faltam gerar a partir desta (relativo à posição real
   // da parcela editada — só gera parcelas NOVAS se o total foi aumentado além do
   // que já existia; se o total não mudou, gera exatamente as que faltavam antes)
-  const mesesParaGerar = data.totalParcelas == null ? 24 : Math.max(0, data.totalParcelas - parcelaAtualOriginal);
+  const ehParcelado = data.totalParcelas != null;
+  const mesAtual = { mes: data.mes, ano: data.ano };
+  // Série existente (se houver) — define prazo/indeterminada quando o modal não informa
+  const serieExistente = registroAtual.recorrenciaGrupoId
+    ? (await db.select().from(recorrencias).where(eq(recorrencias.grupoId, registroAtual.recorrenciaGrupoId)).limit(1))[0]
+    : undefined;
+  let indeterminada = false;
+  let prazoContrato: number | null = null;
+  let fimSerie: { mes: number; ano: number };
+  let mesesParaGerar: number;
+  if (ehParcelado) {
+    mesesParaGerar = Math.max(0, data.totalParcelas! - parcelaAtualOriginal);
+    fimSerie = somarMesesDb(data.mes, data.ano, mesesParaGerar);
+  } else {
+    // Contrato mensal: prazo/indeterminada vêm do modal (se informados) ou da série já salva
+    if (data.indeterminada !== undefined || data.prazoMeses !== undefined) {
+      indeterminada = !!data.indeterminada;
+      prazoContrato = indeterminada ? null : (data.prazoMeses === 12 ? 12 : 24);
+    } else if (serieExistente && serieExistente.tipo === "contrato") {
+      indeterminada = serieExistente.indeterminada;
+      prazoContrato = serieExistente.prazoMeses;
+    } else {
+      prazoContrato = 24;
+    }
+    if (indeterminada) {
+      fimSerie = alvoJanelaDb();
+      if (mesesEntreDb(mesAtual, fimSerie) < 0) fimSerie = mesAtual;
+    } else if (
+      serieExistente && serieExistente.tipo === "contrato" && !serieExistente.indeterminada &&
+      serieExistente.mesFim && serieExistente.anoFim &&
+      (data.indeterminada === undefined && data.prazoMeses === undefined)
+    ) {
+      // Mantém o fim da série já definido (editar não estende o contrato)
+      fimSerie = { mes: serieExistente.mesFim, ano: serieExistente.anoFim };
+      if (mesesEntreDb(mesAtual, fimSerie) < 0) fimSerie = mesAtual;
+    } else {
+      // Prazo (re)definido agora: conta a partir do 1º mês da série, se conhecido
+      const primeiro = parcelasExistentes.length > 0
+        ? parcelasExistentes.reduce((min, t) => (t.ano * 12 + t.mes < min.ano * 12 + min.mes ? { mes: t.mes, ano: t.ano } : min), mesAtual)
+        : mesAtual;
+      fimSerie = somarMesesDb(primeiro.mes, primeiro.ano, (prazoContrato ?? 24) - 1);
+      if (mesesEntreDb(mesAtual, fimSerie) < 0) fimSerie = mesAtual;
+    }
+    mesesParaGerar = mesesEntreDb(mesAtual, fimSerie);
+  }
 
   // Atualizar o registro atual (mantendo sua própria posição na série)
   await db.update(transacoes).set({
@@ -662,6 +770,20 @@ export async function updateTransacaoComRecorrencia(id: number, data: {
   if (registros.length > 0) {
     created = await db.insert(transacoes).values(registros).returning() as any;
   }
+
+  // Registro da série: o fim real é o último mês que existe no grupo (parcelas pagas
+  // preservadas além do fim calculado também contam)
+  const ultimoReal = (await db.select({ mes: transacoes.mes, ano: transacoes.ano }).from(transacoes)
+    .where(eq(transacoes.recorrenciaGrupoId, grupoId))
+    .orderBy(desc(transacoes.ano), desc(transacoes.mes)).limit(1))[0] ?? fimSerie;
+  await salvarRecorrencia({
+    grupoId,
+    tipo: ehParcelado ? "parcelado" : "contrato",
+    prazoMeses: ehParcelado ? data.totalParcelas! : prazoContrato,
+    indeterminada,
+    mesFim: ultimoReal.mes,
+    anoFim: ultimoReal.ano,
+  });
 
   return { updated: registroAtual, created, grupoId };
 }

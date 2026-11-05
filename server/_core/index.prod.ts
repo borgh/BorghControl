@@ -10,6 +10,7 @@ import { initDatabase } from "../initDb";
 import { registerAnexosRoutes } from "../anexos";
 import { registerUploadProjetoRoutes } from "../upload-projeto";
 import { iniciarCronBackup } from "../backup-cron";
+import { iniciarCronRecorrencias } from "../recorrencias";
 import path from "path";
 import fs from "fs";
 
@@ -66,6 +67,8 @@ async function startServer() {
 
   // Iniciar cron de backup automático
   await iniciarCronBackup();
+  // Rotina diária que mantém 12 meses gerados à frente nas séries indeterminadas
+  await iniciarCronRecorrencias();
   
   registerStorageProxy(app);
   registerAnexosRoutes(app);

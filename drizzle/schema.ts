@@ -97,6 +97,24 @@ export const transacoes = pgTable(
 export type Transacao = typeof transacoes.$inferSelect;
 export type InsertTransacao = typeof transacoes.$inferInsert;
 
+// ─── Recorrências (uma linha por série de lançamentos recorrentes) ──────────────
+// Guarda o "contrato" da série: parcelado (N vezes), contrato com prazo (12/24 meses)
+// ou contrato indeterminado (sem fim — o sistema mantém sempre 12 meses gerados à frente).
+export const tipoRecorrenciaEnum = pgEnum("tipo_recorrencia", ["parcelado", "contrato"]);
+
+export const recorrencias = pgTable("recorrencias", {
+  grupoId: varchar("grupoId", { length: 64 }).primaryKey(),
+  tipo: tipoRecorrenciaEnum("tipo").notNull(),
+  prazoMeses: integer("prazoMeses"),            // 12, 24, N parcelas; null quando indeterminada
+  indeterminada: boolean("indeterminada").notNull().default(false),
+  mesFim: integer("mesFim"),                    // último mês gerado da série
+  anoFim: integer("anoFim"),
+  avisoDispensado: boolean("avisoDispensado").notNull().default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull(),
+});
+export type Recorrencia = typeof recorrencias.$inferSelect;
+
 // ─── Configurações do Sistema ─────────────────────────────────────────────────
 export const systemConfig = pgTable("system_config", {
   id: serial("id").primaryKey(),

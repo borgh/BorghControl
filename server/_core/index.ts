@@ -9,6 +9,7 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite.prod";
 import { initDatabase } from "../initDb";
 import { iniciarCronBackup } from "../backup-cron";
+import { iniciarCronRecorrencias } from "../recorrencias";
 import { registerUploadProjetoRoutes } from "../upload-projeto";
 import { execSync } from "child_process";
 import fs from "fs";
@@ -43,6 +44,8 @@ async function startServer() {
   await initDatabase();
   // Iniciar cron de backup
   await iniciarCronBackup();
+  // Rotina diária que mantém 12 meses gerados à frente nas séries indeterminadas
+  await iniciarCronRecorrencias();
   registerStorageProxy(app);
   // Rotas de upload e serviço de imagens de projetos
   registerUploadProjetoRoutes(app);

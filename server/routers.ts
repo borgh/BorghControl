@@ -23,6 +23,7 @@ import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
 import { Pool } from "pg";
 import { ENV } from "./_core/env";
+import { listarAvisosTermino, renovarRecorrencia, tornarIndeterminada, dispensarAviso, getRecorrencia, manterJanelaIndeterminadas } from "./recorrencias";
 import { BOTTOM_NAV_ITEM_KEYS, BOTTOM_NAV_MAX_ITEMS } from "@shared/bottomNavItems";
 
 function getBackupPool() {
@@ -105,6 +106,8 @@ export const appRouter = router({
         observacao: z.string().optional(),
         recorrente: z.boolean().optional(),
         totalParcelas: z.number().min(1).max(360).nullable().optional(),
+        prazoMeses: z.union([z.literal(12), z.literal(24)]).nullable().optional(),
+        indeterminada: z.boolean().optional(),
         emitirNF: z.boolean().optional(),
         prioridade: z.boolean().optional(),
       }))
@@ -170,6 +173,8 @@ export const appRouter = router({
         observacao: z.string().optional(),
         recorrente: z.boolean(),
         totalParcelas: z.number().min(1).max(360).nullable().optional(),
+        prazoMeses: z.union([z.literal(12), z.literal(24)]).nullable().optional(),
+        indeterminada: z.boolean().optional(),
         escopo: z.enum(["apenas_este", "este_e_futuros", "todos"]).optional(),
         emitirNF: z.boolean().optional(),
         prioridade: z.boolean().optional(),
@@ -360,6 +365,26 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => deleteInvestimento(input.id)),
     dashboard: publicProcedure.query(async () => getDashboardProjetos()),
+  }),
+  recorrencias: router({
+    // Dados da série de um lançamento (prazo, indeterminada, fim)
+    get: protectedProcedure
+      .input(z.object({ grupoId: z.string() }))
+      .query(async ({ input }) => getRecorrencia(input.grupoId)),
+    // Contratos que terminam nos próximos 60 dias (ou já terminaram sem tratamento)
+    avisosTermino: protectedProcedure.query(async () => listarAvisosTermino()),
+    renovar: permissionProcedure("edit_lancamentos")
+      .input(z.object({ grupoId: z.string(), meses: z.union([z.literal(12), z.literal(24)]) }))
+      .mutation(async ({ input }) => renovarRecorrencia(input.grupoId, input.meses)),
+    tornarIndeterminada: permissionProcedure("edit_lancamentos")
+      .input(z.object({ grupoId: z.string() }))
+      .mutation(async ({ input }) => tornarIndeterminada(input.grupoId)),
+    dispensarAviso: permissionProcedure("edit_lancamentos")
+      .input(z.object({ grupoId: z.string() }))
+      .mutation(async ({ input }) => dispensarAviso(input.grupoId)),
+    // Força a manutenção da janela das séries indeterminadas (normalmente roda sozinha, 1x/dia)
+    manterJanela: permissionProcedure("edit_lancamentos")
+      .mutation(async () => manterJanelaIndeterminadas()),
   }),
   relatorios: router({
     dashboard: publicProcedure

@@ -200,10 +200,51 @@ export async function initDatabase(): Promise<void> {
       await client.query(`
         ALTER TABLE IF EXISTS projetos ADD COLUMN IF NOT EXISTS imagem_fit VARCHAR(20) DEFAULT 'cover';
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS pago_em TIMESTAMP;
-        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS dataVencimento DATE;
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS "dataVencimento" DATE;
+        -- Colunas de recorrência/NF/prioridade (existem em produção via drizzle; garantidas aqui
+        -- para instalações novas e ambientes de teste)
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS "recorrenciaGrupoId" VARCHAR(64);
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS "totalParcelas" INTEGER;
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS "parcelaAtual" INTEGER;
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS emitir_nf BOOLEAN DEFAULT false;
+        ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS prioridade BOOLEAN NOT NULL DEFAULT false;
+        CREATE INDEX IF NOT EXISTS idx_recorrencia_grupo ON transacoes ("recorrenciaGrupoId");
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS investido BOOLEAN NOT NULL DEFAULT false;
         ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS "bottomNavConfig" TEXT;
         CREATE INDEX IF NOT EXISTS idx_data_vencimento ON transacoes ("dataVencimento");
+
+        -- Recorrências: uma linha por série (parcelado / contrato com prazo / contrato indeterminado)
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tipo_recorrencia') THEN
+            CREATE TYPE tipo_recorrencia AS ENUM ('parcelado', 'contrato');
+          END IF;
+        END $$;
+        CREATE TABLE IF NOT EXISTS recorrencias (
+          "grupoId" VARCHAR(64) PRIMARY KEY,
+          tipo tipo_recorrencia NOT NULL,
+          "prazoMeses" INTEGER,
+          indeterminada BOOLEAN NOT NULL DEFAULT false,
+          "mesFim" INTEGER,
+          "anoFim" INTEGER,
+          "avisoDispensado" BOOLEAN NOT NULL DEFAULT false,
+          "createdAt" TIMESTAMP NOT NULL DEFAULT NOW(),
+          "updatedAt" TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        -- Migração: cada grupo de recorrência já existente vira uma linha.
+        -- Contratos antigos entram como prazo de 24 meses terminando no último mês já gerado
+        -- (comportamento idêntico ao que tinham antes). Parcelados usam totalParcelas.
+        INSERT INTO recorrencias ("grupoId", tipo, "prazoMeses", indeterminada, "mesFim", "anoFim")
+        SELECT
+          t."recorrenciaGrupoId",
+          CASE WHEN MAX(t."totalParcelas") IS NOT NULL THEN 'parcelado'::tipo_recorrencia ELSE 'contrato'::tipo_recorrencia END,
+          CASE WHEN MAX(t."totalParcelas") IS NOT NULL THEN MAX(t."totalParcelas") ELSE 24 END,
+          false,
+          (array_agg(t.mes ORDER BY t.ano DESC, t.mes DESC))[1],
+          MAX(t.ano)
+        FROM transacoes t
+        WHERE t."recorrenciaGrupoId" IS NOT NULL
+        GROUP BY t."recorrenciaGrupoId"
+        ON CONFLICT ("grupoId") DO NOTHING;
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transacoes' AND column_name='valor_investir') THEN
             ALTER TABLE transacoes ADD COLUMN valor_investir NUMERIC(12,2) GENERATED ALWAYS AS (ROUND(valor * 0.10, 2)) STORED;

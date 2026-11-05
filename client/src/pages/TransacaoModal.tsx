@@ -119,6 +119,21 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
   }
 
   const [tipoRecorrencia, setTipoRecorrencia] = useState<TipoRecorrencia>("unico");
+  // Prazo do contrato mensal: 12 / 24 meses ou indeterminado (para sempre)
+  type PrazoContrato = "12" | "24" | "indeterminado";
+  const [prazoContrato, setPrazoContrato] = useState<PrazoContrato>("indeterminado");
+  const [prazoOriginal, setPrazoOriginal] = useState<PrazoContrato | null>(null);
+  const { data: serie } = trpc.recorrencias.get.useQuery(
+    { grupoId: editItem?.recorrenciaGrupoId ?? "" },
+    { enabled: open && !!editItem?.recorrenciaGrupoId }
+  );
+  useEffect(() => {
+    if (!open || !editItem?.recorrenciaGrupoId) { setPrazoOriginal(null); return; }
+    if (!serie || serie.tipo !== "contrato") return;
+    const p: PrazoContrato = serie.indeterminada ? "indeterminado" : (serie.prazoMeses === 12 ? "12" : "24");
+    setPrazoContrato(p);
+    setPrazoOriginal(p);
+  }, [serie, open, editItem?.recorrenciaGrupoId]);
   const [emitirNF, setEmitirNF] = useState(false);
   const [prioridade, setPrioridade] = useState(false);
   const [form, setForm] = useState({
@@ -165,6 +180,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
     } else {
       const d = new Date();
       setTipoRecorrencia("unico");
+      setPrazoContrato("indeterminado");
       setEmitirNF(false);
       setPrioridade(false);
       setPendingAnexos([]);
@@ -293,6 +309,12 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
       emitirNF: tipo === "receita" ? emitirNF : undefined,
       prioridade: tipo === "despesa" ? prioridade : undefined,
     };
+    // Prazo do contrato: na criação sempre vai; na edição só se foi alterado
+    // (assim editar valor/descrição não mexe no fim da série já definido)
+    const prazoAlterado = tipoRecorrencia === "contrato" && (!editItem || prazoOriginal === null || prazoOriginal !== prazoContrato);
+    const prazoPayload = tipoRecorrencia === "contrato" && prazoAlterado
+      ? { indeterminada: prazoContrato === "indeterminado", prazoMeses: prazoContrato === "indeterminado" ? null : (Number(prazoContrato) as 12 | 24) }
+      : {};
 
     if (editItem) {
       if (!recorrente) {
@@ -316,6 +338,7 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           observacao: data.observacao,
           recorrente: true,
           totalParcelas: totalParcelas ?? null,
+          ...prazoPayload,
           emitirNF: tipo === "receita" ? emitirNF : undefined,
           prioridade: tipo === "despesa" ? prioridade : undefined,
         };
@@ -339,13 +362,14 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
           observacao: data.observacao,
           recorrente: true,
           totalParcelas: totalParcelas ?? null,
+          ...prazoPayload,
           escopo: "este_e_futuros",
           emitirNF: tipo === "receita" ? emitirNF : undefined,
           prioridade: tipo === "despesa" ? prioridade : undefined,
         });
       }
     } else {
-      createMut.mutate(data);
+      createMut.mutate({ ...data, ...prazoPayload });
     }
   };
 
@@ -463,9 +487,36 @@ export function TransacaoModal({ open, onClose, tipo, editItem, onSuccess }: Tra
                 </div>
               )}
 
-              {tipoRecorrencia === "contrato" && !isEdit && (
-                <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
-                  Serão gerados lançamentos para os próximos <strong>24 meses</strong>. Você pode excluir parcelas futuras a qualquer momento.
+              {tipoRecorrencia === "contrato" && (
+                <div className="space-y-2 pt-1">
+                  <Label>Prazo do contrato *</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      { key: "12", label: "12 meses", desc: "Avisa ao se aproximar do fim" },
+                      { key: "24", label: "24 meses", desc: "Avisa ao se aproximar do fim" },
+                      { key: "indeterminado", label: "Indeterminado", desc: "Sem fim, até editar ou excluir" },
+                    ] as { key: PrazoContrato; label: string; desc: string }[]).map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => setPrazoContrato(opt.key)}
+                        className={`rounded-lg border p-2.5 text-left transition-colors ${
+                          prazoContrato === opt.key ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/40"
+                        }`}
+                      >
+                        <p className="text-xs font-semibold leading-tight">{opt.label}</p>
+                        <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{opt.desc}</p>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-700">
+                    {prazoContrato === "indeterminado"
+                      ? <>O sistema mantém sempre <strong>12 meses</strong> de lançamentos gerados à frente e repõe automaticamente — nunca precisa renovar.</>
+                      : <>Serão gerados lançamentos para <strong>{prazoContrato} meses</strong>. Faltando 60 dias para o fim, o sistema avisa e oferece renovar com um clique.</>}
+                    {isEdit && serie?.tipo === "contrato" && serie.mesFim && serie.anoFim && !serie.indeterminada && (
+                      <> Fim atual da série: <strong>{String(serie.mesFim).padStart(2, "0")}/{serie.anoFim}</strong>.</>
+                    )}
+                  </div>
                 </div>
               )}
 

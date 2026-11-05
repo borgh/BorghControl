@@ -23,7 +23,7 @@ import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
 import { Pool } from "pg";
 import { ENV } from "./_core/env";
-import { getMetaFinanceira, getFluxoCaixa, getScoreSaude } from "./orcamento";
+import { getMetaFinanceira, getFluxoCaixa, getScoreSaude, getLembreteSalario, separarPoupanca } from "./orcamento";
 import { listarAvisosTermino, renovarRecorrencia, tornarIndeterminada, dispensarAviso, getRecorrencia, manterJanelaIndeterminadas } from "./recorrencias";
 import { BOTTOM_NAV_ITEM_KEYS, BOTTOM_NAV_MAX_ITEMS } from "@shared/bottomNavItems";
 
@@ -379,6 +379,11 @@ export const appRouter = router({
         diaSalario: z.number().min(1).max(31).nullable().optional(),
       }))
       .mutation(async ({ input }) => saveOrcamentoConfig(input)),
+    // Lembrete do dia do salário: receitas do mês ainda não investidas e o total a separar
+    lembreteSalario: protectedProcedure.query(async () => getLembreteSalario()),
+    separarPoupanca: permissionProcedure("mark_paid")
+      .input(z.object({ ids: z.array(z.number()).min(1) }))
+      .mutation(async ({ input }) => separarPoupanca(input.ids)),
   }),
   recorrencias: router({
     // Dados da série de um lançamento (prazo, indeterminada, fim)

@@ -3,6 +3,7 @@ import { keepPreviousData } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
 import AvisosTerminoContratos, { useAvisosPorGrupo } from "@/components/AvisosTerminoContratos";
+import LembreteSalarioBanner from "@/components/LembreteSalarioBanner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -313,6 +314,8 @@ export default function Receitas() {
           </Button>
         )}
       </div>
+
+      <LembreteSalarioBanner />
 
       {/* Contratos que terminam em breve */}
       <AvisosTerminoContratos tipo="receita" />

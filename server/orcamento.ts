@@ -171,3 +171,35 @@ export async function getScoreSaude(mes: number, ano: number) {
     penalidade: { pontos: penal, emAtraso },
   };
 }
+
+// ─── Lembrete do dia do salário ──────────────────────────────────────────────
+
+/** Receitas do mês atual ainda não marcadas como investidas e o total a separar (Investir X%) */
+export async function getLembreteSalario() {
+  const db = await getDb();
+  const cfg = await getOrcamentoConfig();
+  if (!db) return { diaSalario: cfg.diaSalario, pct: percentuais(cfg).poupanca, ehHoje: false, receitas: [], totalSeparar: 0, mes: 0, ano: 0 };
+  const hoje = new Date();
+  const mes = hoje.getMonth() + 1, ano = hoje.getFullYear();
+  const rows = await db.select({ id: transacoes.id, descricao: transacoes.descricao, valor: transacoes.valor, valorInvestir: transacoes.valorInvestir, status: transacoes.status })
+    .from(transacoes)
+    .where(and(eq(transacoes.mes, mes), eq(transacoes.ano, ano), eq(transacoes.tipo, "receita"), eq(transacoes.investido, false), ne(transacoes.status, "cancelado")));
+  const receitas = rows.map((r) => ({ id: r.id, descricao: r.descricao, valor: Number(r.valor), valorInvestir: Number(r.valorInvestir ?? 0), recebida: r.status === "pago" }));
+  const totalSeparar = receitas.reduce((s, r) => s + r.valorInvestir, 0);
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const diaRef = cfg.diaSalario ? Math.min(cfg.diaSalario, diasNoMes) : null;
+  return { diaSalario: cfg.diaSalario, pct: percentuais(cfg).poupanca, ehHoje: diaRef !== null && hoje.getDate() >= diaRef, receitas, totalSeparar, mes, ano };
+}
+
+/** Marca as receitas informadas como investidas (o valor "Investir X%" foi separado) */
+export async function separarPoupanca(ids: number[]) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  if (ids.length === 0) return { marcadas: 0 };
+  let marcadas = 0;
+  for (const id of ids) {
+    const r = await db.update(transacoes).set({ investido: true, updatedAt: new Date() }).where(and(eq(transacoes.id, id), eq(transacoes.tipo, "receita"))).returning({ id: transacoes.id });
+    marcadas += r.length;
+  }
+  return { marcadas };
+}

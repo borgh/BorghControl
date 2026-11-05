@@ -116,6 +116,16 @@ function OrcamentoCard() {
             </p>
           </div>
         )}
+        <div className="rounded-lg border p-3 space-y-2">
+          <Label className="text-sm">Dia do salário (lembrete)</Label>
+          <p className="text-xs text-muted-foreground">
+            A partir desse dia, o Dashboard e Contas a Receber lembram de separar os {cfg.poupanca}% das receitas do mês, com um botão para marcar como investido. Deixe em branco para desativar.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input type="number" min={1} max={31} placeholder="Ex: 5" className="w-24" value={cfg.diaSalario ?? ""} onChange={(e) => setCfg({ ...cfg, diaSalario: e.target.value === "" ? null : Math.max(1, Math.min(31, Number(e.target.value) || 1)) })} />
+            <span className="text-xs text-muted-foreground">de cada mês</span>
+          </div>
+        </div>
         <Button onClick={() => save.mutate(cfg)} disabled={save.isPending || !somaOk} className="gap-2 w-full sm:w-auto">
           <Save className="h-4 w-4" /> {save.isPending ? "Salvando..." : "Salvar Orçamento"}
         </Button>

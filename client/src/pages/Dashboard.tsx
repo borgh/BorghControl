@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import AvisosTerminoContratos from "@/components/AvisosTerminoContratos";
+import LembreteSalarioBanner from "@/components/LembreteSalarioBanner";
 import MetaFinanceiraCard from "@/components/MetaFinanceiraCard";
 import FluxoCaixaCard from "@/components/FluxoCaixaCard";
 import ScoreSaudeCard from "@/components/ScoreSaudeCard";
@@ -210,6 +211,9 @@ export default function Dashboard() {
           </Select>
         </div>
       </div>
+
+      {/* Dia do salário: separar a poupança (Investir X%) */}
+      <LembreteSalarioBanner />
 
       {/* Contratos que terminam em breve */}
       <AvisosTerminoContratos />

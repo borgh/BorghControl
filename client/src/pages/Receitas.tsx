@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
+import AvisosTerminoContratos, { useAvisosPorGrupo } from "@/components/AvisosTerminoContratos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -105,13 +106,21 @@ function sortItems(items: any[], ordem: OrdemKey): any[] {
   });
 }
 
-function RecorrenciaBadge({ item }: { item: any }) {
+function RecorrenciaBadge({ item, diasRestantes }: { item: any; diasRestantes?: number }) {
   if (!item.recorrente) return null;
   if (item.totalParcelas == null) {
     return (
-      <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">
-        <Infinity className="h-2.5 w-2.5" /> Contrato
-      </Badge>
+      <>
+        <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">
+          <Infinity className="h-2.5 w-2.5" /> Contrato
+        </Badge>
+        {diasRestantes !== undefined && (
+          <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-amber-800 border-amber-300 bg-amber-50 shrink-0">
+            <AlertTriangle className="h-2.5 w-2.5" />
+            {diasRestantes < 0 ? "Contrato encerrado" : diasRestantes === 0 ? "Termina hoje" : `Termina em ${diasRestantes}d`}
+          </Badge>
+        )}
+      </>
     );
   }
   return (
@@ -262,6 +271,8 @@ export default function Receitas() {
   const totalAtraso = rawItems.filter((i: any) => isEmAtrasoReceita(i)).reduce((s: number, i: any) => s + Number(i.valor), 0);
   const itensVenceEmBreve = rawItems.filter((i: any) => isVenceEmBreveReceita(i));
 
+  const avisosPorGrupo = useAvisosPorGrupo();
+
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId, mes: item.mes, ano: item.ano });
     setDeleteMode("single");
@@ -302,6 +313,9 @@ export default function Receitas() {
           </Button>
         )}
       </div>
+
+      {/* Contratos que terminam em breve */}
+      <AvisosTerminoContratos tipo="receita" />
 
       {/* Banner de alerta — vence em breve */}
       {itensVenceEmBreve.length > 0 && status !== "vence_em_breve" && (
@@ -568,7 +582,7 @@ export default function Receitas() {
                             <p className={`text-sm font-semibold leading-tight truncate ${isAtraso ? "text-red-700" : isPendente ? "text-amber-800" : isCancelado ? "text-muted-foreground" : ""}`}>
                               {item.descricao}
                             </p>
-                            <RecorrenciaBadge item={item} />
+                            <RecorrenciaBadge item={item} diasRestantes={item.recorrenciaGrupoId ? avisosPorGrupo[item.recorrenciaGrupoId] : undefined} />
                             {item.emitirNF && (
                               <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-blue-700 border-blue-200 bg-blue-50 shrink-0">
                                 <FileText className="h-2.5 w-2.5" /> NF

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
+import AvisosTerminoContratos from "@/components/AvisosTerminoContratos";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -206,6 +207,9 @@ export default function Dashboard() {
           </Select>
         </div>
       </div>
+
+      {/* Contratos que terminam em breve */}
+      <AvisosTerminoContratos />
 
       {/* Cards */}
       {(() => {

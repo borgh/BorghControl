@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { keepPreviousData } from "@tanstack/react-query";
 import { useSearch } from "wouter";
 import { trpc } from "@/lib/trpc";
+import AvisosTerminoContratos, { useAvisosPorGrupo } from "@/components/AvisosTerminoContratos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -107,13 +108,21 @@ function sortItems(items: any[], ordem: OrdemKey): any[] {
   });
 }
 
-function RecorrenciaBadge({ item }: { item: any }) {
+function RecorrenciaBadge({ item, diasRestantes }: { item: any; diasRestantes?: number }) {
   if (!item.recorrente) return null;
   if (item.totalParcelas == null) {
     return (
-      <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">
-        <Infinity className="h-2.5 w-2.5" /> Contrato
-      </Badge>
+      <>
+        <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-emerald-700 border-emerald-200 bg-emerald-50 shrink-0">
+          <Infinity className="h-2.5 w-2.5" /> Contrato
+        </Badge>
+        {diasRestantes !== undefined && (
+          <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-amber-800 border-amber-300 bg-amber-50 shrink-0">
+            <AlertTriangle className="h-2.5 w-2.5" />
+            {diasRestantes < 0 ? "Contrato encerrado" : diasRestantes === 0 ? "Termina hoje" : `Termina em ${diasRestantes}d`}
+          </Badge>
+        )}
+      </>
     );
   }
   return (
@@ -256,6 +265,8 @@ export default function Despesas() {
   const itensVenceEmBreve = rawItems.filter((i: any) => isVenceEmBreve(i));
   const totalVenceEmBreve = itensVenceEmBreve.reduce((s: number, i: any) => s + Number(i.valor), 0);
 
+  const avisosPorGrupo = useAvisosPorGrupo();
+
   const handleDeleteClick = (item: any) => {
     setDeleteTarget({ id: item.id, grupoId: item.recorrenciaGrupoId, mes: item.mes, ano: item.ano });
     setDeleteMode("single");
@@ -298,6 +309,9 @@ export default function Despesas() {
       </div>
 
       {/* Banner de alerta — vence em breve */}
+      {/* Contratos que terminam em breve */}
+      <AvisosTerminoContratos tipo="despesa" />
+
       {itensVenceEmBreve.length > 0 && (
         <div
           className="flex items-start gap-3 rounded-lg border border-orange-300 bg-orange-50 px-4 py-3 cursor-pointer hover:bg-orange-100 transition-colors"
@@ -555,7 +569,7 @@ export default function Despesas() {
                             <p className={`text-sm font-semibold leading-tight truncate ${emAtraso ? "text-red-900" : isPendente ? "text-amber-900" : ""}`}>
                               {item.descricao}
                             </p>
-                            <RecorrenciaBadge item={item} />
+                            <RecorrenciaBadge item={item} diasRestantes={item.recorrenciaGrupoId ? avisosPorGrupo[item.recorrenciaGrupoId] : undefined} />
                             {item.prioridade && (
                               <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 text-orange-700 border-orange-300 bg-orange-50 shrink-0">
                                 <Flame className="h-2.5 w-2.5" /> Prioridade

@@ -1,16 +1,29 @@
 import { trpc } from "@/lib/trpc";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, MutationCache, keepPreviousData } from "@tanstack/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
 import "./index.css";
 
-const queryClient = new QueryClient({
+// Atualização automática global:
+// - Toda mutation bem-sucedida (criar/editar/excluir/marcar pago etc.) invalida TODAS as
+//   consultas ativas — qualquer tela aberta se atualiza sozinha, inclusive telas futuras,
+//   sem depender de invalidações manuais espalhadas pelo código.
+// - refetchOnWindowFocus: ao voltar para a aba/app, os dados são atualizados.
+// - keepPreviousData: enquanto uma consulta atualiza, a tela mantém os dados anteriores
+//   (nada "pisca" vazio).
+const queryClient: QueryClient = new QueryClient({
+  mutationCache: new MutationCache({
+    onSuccess: () => {
+      queryClient.invalidateQueries();
+    },
+  }),
   defaultOptions: {
     queries: {
       retry: false,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      placeholderData: keepPreviousData,
     },
   },
 });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import AvisosTerminoContratos from "@/components/AvisosTerminoContratos";
+import MetaFinanceiraCard from "@/components/MetaFinanceiraCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -247,6 +248,9 @@ export default function Dashboard() {
               <StatCard title="Vence em Breve" value={String(venceEmBreve.length)} icon={Clock} color="bg-orange-500" sub="próximos 3 dias" href="/despesas?status=vence_em_breve" />
             )}
           </div>
+
+          {/* Meta Financeira — regra 50-30-20 (real × meta por grupo) */}
+          <MetaFinanceiraCard mes={mesFiltro} ano={anoFiltro} />
 
           {/* Card de Saldo Pendente — discrepância entre a receber e a pagar (GERAL, todos os meses) */}
           <Card className={`border-2 transition-colors ${

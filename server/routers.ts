@@ -23,6 +23,7 @@ import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
 import { Pool } from "pg";
 import { ENV } from "./_core/env";
+import { getMetaFinanceira, getFluxoCaixa, getScoreSaude } from "./orcamento";
 import { listarAvisosTermino, renovarRecorrencia, tornarIndeterminada, dispensarAviso, getRecorrencia, manterJanelaIndeterminadas } from "./recorrencias";
 import { BOTTOM_NAV_ITEM_KEYS, BOTTOM_NAV_MAX_ITEMS } from "@shared/bottomNavItems";
 
@@ -416,6 +417,18 @@ export const appRouter = router({
       .input(z.object({ dias: z.number().default(7) }).optional())
       .query(async ({ input }) => getProximosVencimentos(input?.dias ?? 7)),
     anosDisponiveis: publicProcedure.query(async () => getAnosDisponiveis()),
+    // Regra 50-30-20 — real × meta por grupo (mes=0 → ano inteiro)
+    metaFinanceira: publicProcedure
+      .input(z.object({ mes: z.number().min(0).max(12), ano: z.number() }))
+      .query(async ({ input }) => getMetaFinanceira(input.mes, input.ano)),
+    // Fluxo de caixa diário: Realizado × Projetado
+    fluxoCaixa: publicProcedure
+      .input(z.object({ mes: z.number().min(0).max(12), ano: z.number() }))
+      .query(async ({ input }) => getFluxoCaixa(input.mes, input.ano)),
+    // Score de saúde financeira (0–100)
+    scoreSaude: publicProcedure
+      .input(z.object({ mes: z.number().min(0).max(12), ano: z.number() }))
+      .query(async ({ input }) => getScoreSaude(input.mes, input.ano)),
   }),
   backup: router({
     // Listar agendamentos

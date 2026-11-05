@@ -17,6 +17,8 @@ import { UserPlus, Shield, ShieldOff, Trash2, Settings, Users, Eye, EyeOff, Penc
 import { BOTTOM_NAV_REGISTRY, parseBottomNavConfig } from "@/lib/bottomNavRegistry";
 import { BOTTOM_NAV_MAX_ITEMS, type BottomNavItemKey } from "@shared/bottomNavItems";
 import { useTheme, THEME_OPTIONS } from "@/contexts/ThemeContext";
+import { normalizarOrcamento, type ModoOrcamento, type OrcamentoConfig } from "@shared/orcamento";
+import { PieChart as PieIcon } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = { admin: "Administrador", user: "Usuário" };
 const ROLE_COLORS: Record<string, string> = {
@@ -62,6 +64,65 @@ const PERMISSIONS: Permission[] = [
 const DEFAULT_USER_PERMS = Object.fromEntries(PERMISSIONS.map((p) => [p.key, p.userDefault]));
 
 const emptyForm = { name: "", email: "", password: "", role: "user" as "admin" | "user" };
+
+// Card da regra 50-30-20 — configuração do sistema (admin)
+function OrcamentoCard() {
+  const { data } = trpc.orcamento.get.useQuery();
+  const [cfg, setCfg] = useState<OrcamentoConfig>(() => normalizarOrcamento(null));
+  useEffect(() => { if (data) setCfg(data); }, [data]);
+  const save = trpc.orcamento.save.useMutation({
+    onSuccess: () => toast.success("Orçamento salvo! O \"Investir X%\" das receitas foi realinhado ao novo percentual."),
+    onError: (e) => toast.error(e.message),
+  });
+  const soma = cfg.essencial + cfg.lazer + cfg.poupanca;
+  const somaOk = cfg.modo !== "personalizado" || soma === 100;
+  const opcoes: { key: ModoOrcamento; label: string; desc: string }[] = [
+    { key: "padrao", label: "Sim (Padrão)", desc: "50% essenciais · 30% lazer · 20% poupança" },
+    { key: "livre", label: "Não (Gerenciar livremente)", desc: "Sem metas por grupo; só o Investir 20% nas receitas" },
+    { key: "personalizado", label: "Personalizar proporções", desc: "Você define os três percentuais" },
+  ];
+  const set = (k: "essencial" | "lazer" | "poupanca", v: string) => setCfg({ ...cfg, [k]: Math.max(0, Math.min(100, Number(v) || 0)) });
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><PieIcon className="h-4 w-4" /> Orçamento — Regra 50-30-20</CardTitle>
+        <CardDescription>
+          Divide a renda do mês (receitas recebidas e previstas) em Essenciais, Lazer & Compras e Poupança/Investimentos.
+          O percentual de poupança também define o <strong>Investir X%</strong> sugerido em cada receita.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          {opcoes.map((o) => (
+            <label key={o.key} className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${cfg.modo === o.key ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/40"}`}>
+              <input type="radio" name="modoOrcamento" className="mt-0.5" checked={cfg.modo === o.key} onChange={() => setCfg({ ...cfg, modo: o.key, ...(o.key !== "personalizado" ? { essencial: 50, lazer: 30, poupanca: 20 } : {}) })} />
+              <div>
+                <p className="text-sm font-medium">{o.label}</p>
+                <p className="text-xs text-muted-foreground">{o.desc}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        {cfg.modo === "personalizado" && (
+          <div className="grid grid-cols-3 gap-3">
+            {([["essencial", "Essencial (%)"], ["lazer", "Lazer (%)"], ["poupanca", "Poupança (%)"]] as const).map(([k, l]) => (
+              <div key={k} className="space-y-1">
+                <Label className="text-xs">{l}</Label>
+                <Input type="number" min={0} max={100} value={cfg[k]} onChange={(e) => set(k, e.target.value)} />
+              </div>
+            ))}
+            <p className={`col-span-3 text-xs ${somaOk ? "text-muted-foreground" : "text-destructive font-medium"}`}>
+              Soma: {soma}% {somaOk ? "" : "— precisa somar 100%"}
+            </p>
+          </div>
+        )}
+        <Button onClick={() => save.mutate(cfg)} disabled={save.isPending || !somaOk} className="gap-2 w-full sm:w-auto">
+          <Save className="h-4 w-4" /> {save.isPending ? "Salvando..." : "Salvar Orçamento"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 // Card de seleção do tema de cores do sistema — preferência pessoal (salva no navegador)
 function TemaCard() {
@@ -379,6 +440,9 @@ export default function Configuracoes() {
 
       {currentUser?.role === "admin" && (
       <>
+      {/* Orçamento (regra 50-30-20) */}
+      <OrcamentoCard />
+
       {/* Usuários */}
       <Card>
         <CardHeader className="pb-3">

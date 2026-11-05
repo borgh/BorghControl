@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Tag } from "lucide-react";
+import { GRUPO_LABEL, type GrupoOrcamento } from "@shared/orcamento";
+
+const GRUPO_COR: Record<string, string> = { essencial: "bg-blue-50 text-blue-700 border-blue-200", lazer: "bg-orange-50 text-orange-700 border-orange-200", investimento: "bg-emerald-50 text-emerald-700 border-emerald-200" };
 
 const CORES = ["#10b981","#3b82f6","#f59e0b","#ef4444","#8b5cf6","#06b6d4","#f97316","#84cc16","#ec4899","#6366f1"];
 
@@ -19,7 +22,7 @@ export default function Categorias() {
   const [modal, setModal] = useState(false);
   const [editItem, setEditItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ nome: "", tipo: "despesa" as "despesa" | "receita", cor: "#10b981" });
+  const [form, setForm] = useState({ nome: "", tipo: "despesa" as "despesa" | "receita", cor: "#10b981", grupoOrcamento: "essencial" as GrupoOrcamento });
 
   const createMut = trpc.categorias.create.useMutation({
     onSuccess: () => { toast.success("Categoria criada!"); utils.categorias.list.invalidate(); setModal(false); },
@@ -34,12 +37,12 @@ export default function Categorias() {
     onError: (e) => toast.error(e.message),
   });
 
-  const openEdit = (c: any) => { setEditItem(c); setForm({ nome: c.nome, tipo: c.tipo, cor: c.cor ?? "#10b981" }); setModal(true); };
-  const openNew = () => { setEditItem(null); setForm({ nome: "", tipo: "despesa", cor: "#10b981" }); setModal(true); };
+  const openEdit = (c: any) => { setEditItem(c); setForm({ nome: c.nome, tipo: c.tipo, cor: c.cor ?? "#10b981", grupoOrcamento: (c.grupoOrcamento ?? "essencial") as GrupoOrcamento }); setModal(true); };
+  const openNew = () => { setEditItem(null); setForm({ nome: "", tipo: "despesa", cor: "#10b981", grupoOrcamento: "essencial" }); setModal(true); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (editItem) updateMut.mutate({ id: editItem.id, nome: form.nome, cor: form.cor });
+    if (editItem) updateMut.mutate({ id: editItem.id, nome: form.nome, cor: form.cor, grupoOrcamento: form.tipo === "despesa" ? form.grupoOrcamento : undefined });
     else createMut.mutate(form);
   };
 
@@ -73,6 +76,11 @@ export default function Categorias() {
                     <div key={c.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 group">
                       <div className="h-3 w-3 rounded-full shrink-0" style={{ background: c.cor ?? "#94a3b8" }} />
                       <span className="flex-1 text-sm font-medium">{c.nome}</span>
+                      {c.tipo === "despesa" && (
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${GRUPO_COR[c.grupoOrcamento ?? "essencial"]}`}>
+                          {GRUPO_LABEL[(c.grupoOrcamento ?? "essencial") as GrupoOrcamento]}
+                        </Badge>
+                      )}
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -102,6 +110,19 @@ export default function Categorias() {
                   <SelectContent>
                     <SelectItem value="despesa">Despesa</SelectItem>
                     <SelectItem value="receita">Receita</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {form.tipo === "despesa" && (
+              <div className="space-y-1.5">
+                <Label>Grupo do orçamento (regra 50-30-20)</Label>
+                <Select value={form.grupoOrcamento} onValueChange={(v) => setForm({ ...form, grupoOrcamento: v as GrupoOrcamento })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="essencial">Essenciais — moradia, mercado, saúde, transporte</SelectItem>
+                    <SelectItem value="lazer">Lazer & Compras — restaurantes, lazer, compras extras</SelectItem>
+                    <SelectItem value="investimento">Investimentos / Sobra — o que você guarda</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

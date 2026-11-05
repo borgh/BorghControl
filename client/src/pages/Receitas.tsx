@@ -609,7 +609,7 @@ export default function Receitas() {
                                 Modificado: {new Date(item.updatedAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                               </p>
                             )}
-                            {/* Badge de investimento 10% */}
+                            {/* Badge de investimento (Investir X% da regra 50-30-20) */}
                             {item.valorInvestir && (
                               <div className="flex items-center gap-1 mt-1">
                                 <div className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium transition-all ${
@@ -649,7 +649,7 @@ export default function Receitas() {
                                     : "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
                                 }`}
                                 onClick={() => toggleInvestido.mutate({ id: item.id, investido: !item.investido })}
-                                title={item.investido ? "Desmarcar como investido" : "Marcar 10% como investido"}
+                                title={item.investido ? "Desmarcar como investido" : "Marcar valor como investido"}
                               >
                                 <PiggyBank className="h-3.5 w-3.5" />
                               </Button>

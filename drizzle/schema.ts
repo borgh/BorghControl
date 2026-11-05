@@ -50,6 +50,8 @@ export const categorias = pgTable("categorias", {
   tipo: tipoTransacaoEnum("tipo").notNull(),
   cor: varchar("cor", { length: 7 }).default("#6366f1"),
   icone: varchar("icone", { length: 50 }).default("tag"),
+  // Grupo da regra 50-30-20 (só faz sentido para despesas): essencial | lazer | investimento
+  grupoOrcamento: varchar("grupo_orcamento", { length: 20 }).notNull().default("essencial"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

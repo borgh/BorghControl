@@ -213,6 +213,14 @@ export async function initDatabase(): Promise<void> {
         ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS "bottomNavConfig" TEXT;
         CREATE INDEX IF NOT EXISTS idx_data_vencimento ON transacoes ("dataVencimento");
 
+        -- Configurações do sistema (chave/valor) — existe em produção via drizzle; garantida aqui
+        CREATE TABLE IF NOT EXISTS system_config (
+          id SERIAL PRIMARY KEY,
+          config_key VARCHAR(100) NOT NULL UNIQUE,
+          config_value TEXT NOT NULL,
+          updated_at BIGINT
+        );
+
         -- Recorrências: uma linha por série (parcelado / contrato com prazo / contrato indeterminado)
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'tipo_recorrencia') THEN
@@ -245,6 +253,62 @@ export async function initDatabase(): Promise<void> {
         WHERE t."recorrenciaGrupoId" IS NOT NULL
         GROUP BY t."recorrenciaGrupoId"
         ON CONFLICT ("grupoId") DO NOTHING;
+
+        -- Regra 50-30-20: grupo de orçamento nas categorias (classificação inicial feita UMA vez)
+        ALTER TABLE IF EXISTS categorias ADD COLUMN IF NOT EXISTS grupo_orcamento VARCHAR(20) NOT NULL DEFAULT 'essencial';
+        DO $$ BEGIN
+          IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = 'categorias_grupo_v1') THEN
+            UPDATE categorias SET grupo_orcamento = 'lazer'
+              WHERE tipo = 'despesa' AND nome IN ('Lazer', 'Cartão de Crédito', 'Outros Gastos', 'Outros', 'Compras', 'Restaurantes', 'Viagens', 'Assinaturas');
+            UPDATE categorias SET grupo_orcamento = 'investimento'
+              WHERE tipo = 'despesa' AND nome IN ('Investimentos', 'Poupança', 'Reserva');
+            INSERT INTO system_config (config_key, config_value, updated_at)
+              VALUES ('categorias_grupo_v1', '1', (EXTRACT(EPOCH FROM NOW()) * 1000)::bigint);
+          END IF;
+        END $$;
+
+        -- "Investir X%": valor_investir deixa de ser coluna gerada fixa em 10% e passa a seguir o
+        -- percentual de poupança da regra 50-30-20 (padrão 20%), via trigger. Receitas já marcadas
+        -- como investidas mantêm o valor histórico.
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transacoes' AND column_name='valor_investir' AND is_generated = 'ALWAYS') THEN
+            ALTER TABLE transacoes DROP COLUMN valor_investir;
+            ALTER TABLE transacoes ADD COLUMN valor_investir NUMERIC(12,2);
+            UPDATE transacoes SET valor_investir = ROUND(valor * 0.10, 2) WHERE tipo = 'receita';
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transacoes' AND column_name='valor_investir') THEN
+            ALTER TABLE transacoes ADD COLUMN valor_investir NUMERIC(12,2);
+          END IF;
+        END $$;
+        CREATE OR REPLACE FUNCTION trg_transacoes_valor_investir() RETURNS trigger AS $fn$
+        DECLARE pct NUMERIC;
+        BEGIN
+          SELECT COALESCE((config_value::json->>'poupanca')::numeric, 20) INTO pct
+            FROM system_config WHERE config_key = 'orcamento';
+          IF pct IS NULL THEN pct := 20; END IF;
+          IF NEW.tipo = 'receita' THEN
+            IF TG_OP = 'INSERT' OR COALESCE(NEW.investido, false) = false OR NEW.valor IS DISTINCT FROM OLD.valor THEN
+              NEW.valor_investir := ROUND(NEW.valor * pct / 100, 2);
+            END IF;
+          ELSE
+            NEW.valor_investir := NULL;
+          END IF;
+          RETURN NEW;
+        END
+        $fn$ LANGUAGE plpgsql;
+        DROP TRIGGER IF EXISTS transacoes_valor_investir ON transacoes;
+        CREATE TRIGGER transacoes_valor_investir BEFORE INSERT OR UPDATE ON transacoes
+          FOR EACH ROW EXECUTE FUNCTION trg_transacoes_valor_investir();
+        -- Alinha as receitas ainda não investidas ao percentual atual (uma única vez por versão)
+        DO $$ DECLARE pct NUMERIC; BEGIN
+          IF NOT EXISTS (SELECT 1 FROM system_config WHERE config_key = 'valor_investir_regra_v1') THEN
+            SELECT COALESCE((config_value::json->>'poupanca')::numeric, 20) INTO pct FROM system_config WHERE config_key = 'orcamento';
+            IF pct IS NULL THEN pct := 20; END IF;
+            UPDATE transacoes SET valor_investir = ROUND(valor * pct / 100, 2) WHERE tipo = 'receita' AND COALESCE(investido, false) = false;
+            INSERT INTO system_config (config_key, config_value, updated_at)
+              VALUES ('valor_investir_regra_v1', '1', (EXTRACT(EPOCH FROM NOW()) * 1000)::bigint);
+          END IF;
+        END $$;
         DO $$ BEGIN
           IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='transacoes' AND column_name='valor_investir') THEN
             ALTER TABLE transacoes ADD COLUMN valor_investir NUMERIC(12,2) GENERATED ALWAYS AS (ROUND(valor * 0.10, 2)) STORED;

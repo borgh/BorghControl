@@ -17,7 +17,7 @@ import {
   getResumoMensal, getResumoAnual, getDespesasPorCategoria, getProximosVencimentos,
   getDashboardStats, getAnosDisponiveis,
   listUsers, updateUserRole, toggleUserAtivo, deleteUser, createUserByAdmin, updateUserByAdmin,
-  getUserPermissions, saveUserPermissions, updateBottomNavConfig,
+  getUserPermissions, saveUserPermissions, updateBottomNavConfig, getOrcamentoConfig, saveOrcamentoConfig,
 } from "./db";
 import { TRPCError } from "@trpc/server";
 import { executarBackup, calcularProximaExecucao } from "./backup";
@@ -71,11 +71,11 @@ export const appRouter = router({
       .query(async ({ input }) => listCategorias(input?.tipo)),
     // Criar categoria: requer permissão manage_categorias
     create: permissionProcedure("manage_categorias")
-      .input(z.object({ nome: z.string().min(1).max(100), tipo: z.enum(["despesa", "receita"]), cor: z.string().optional(), icone: z.string().optional() }))
+      .input(z.object({ nome: z.string().min(1).max(100), tipo: z.enum(["despesa", "receita"]), cor: z.string().optional(), icone: z.string().optional(), grupoOrcamento: z.enum(["essencial", "lazer", "investimento"]).optional() }))
       .mutation(async ({ input }) => createCategoria(input)),
     // Editar categoria: requer permissão manage_categorias
     update: permissionProcedure("manage_categorias")
-      .input(z.object({ id: z.number(), nome: z.string().min(1).max(100).optional(), cor: z.string().optional(), icone: z.string().optional() }))
+      .input(z.object({ id: z.number(), nome: z.string().min(1).max(100).optional(), cor: z.string().optional(), icone: z.string().optional(), grupoOrcamento: z.enum(["essencial", "lazer", "investimento"]).optional() }))
       .mutation(async ({ input }) => { const { id, ...data } = input; return updateCategoria(id, data); }),
     // Excluir categoria: requer permissão manage_categorias
     delete: permissionProcedure("manage_categorias")
@@ -205,7 +205,7 @@ export const appRouter = router({
     marcarPendente: permissionProcedure("mark_paid")
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => updateTransacao(input.id, { status: "pendente" })),
-    // Toggle investido: marcar/desmarcar 10% investido em receita
+    // Toggle investido: marcar/desmarcar o valor "Investir X%" (regra 50-30-20) em receita
     toggleInvestido: permissionProcedure("mark_paid")
       .input(z.object({ id: z.number(), investido: z.boolean() }))
       .mutation(async ({ input }) => updateTransacao(input.id, { investido: input.investido })),
@@ -365,6 +365,19 @@ export const appRouter = router({
       .input(z.object({ id: z.number() }))
       .mutation(async ({ input }) => deleteInvestimento(input.id)),
     dashboard: publicProcedure.query(async () => getDashboardProjetos()),
+  }),
+  orcamento: router({
+    // Configuração da regra 50-30-20 (modo, percentuais, dia do salário)
+    get: publicProcedure.query(async () => getOrcamentoConfig()),
+    save: permissionProcedure("manage_categorias")
+      .input(z.object({
+        modo: z.enum(["padrao", "livre", "personalizado"]),
+        essencial: z.number().min(0).max(100),
+        lazer: z.number().min(0).max(100),
+        poupanca: z.number().min(0).max(100),
+        diaSalario: z.number().min(1).max(31).nullable().optional(),
+      }))
+      .mutation(async ({ input }) => saveOrcamentoConfig(input)),
   }),
   recorrencias: router({
     // Dados da série de um lançamento (prazo, indeterminada, fim)

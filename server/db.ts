@@ -3,6 +3,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { randomUUID } from "crypto";
 import { users, categorias, transacoes, systemConfig, recorrencias, type InsertUser, type InsertTransacao, type InsertCategoria } from "../drizzle/schema";
+import { normalizarOrcamento, type OrcamentoConfig } from "@shared/orcamento";
 
 let _db: ReturnType<typeof drizzle> | null = null;
 let _pool: Pool | null = null;
@@ -57,6 +58,34 @@ export async function saveUserPermissions(permissions: Record<string, boolean>):
   await db.insert(systemConfig)
     .values({ chave: 'user_permissions', valor: JSON.stringify(permissions), updatedAt: Date.now() })
     .onConflictDoUpdate({ target: systemConfig.chave, set: { valor: JSON.stringify(permissions), updatedAt: Date.now() } });
+}
+
+// ─── Orçamento (regra 50-30-20) ─────────────────────────────────────────────
+export async function getOrcamentoConfig(): Promise<OrcamentoConfig> {
+  const db = await getDb();
+  if (!db) return normalizarOrcamento(null);
+  try {
+    const rows = await db.select().from(systemConfig).where(eq(systemConfig.chave, "orcamento"));
+    if (rows.length > 0) return normalizarOrcamento(JSON.parse(rows[0].valor));
+  } catch {}
+  return normalizarOrcamento(null);
+}
+
+export async function saveOrcamentoConfig(raw: Partial<OrcamentoConfig>): Promise<OrcamentoConfig> {
+  const db = await getDb();
+  if (!db) throw new Error("DB not available");
+  const cfg = normalizarOrcamento(raw);
+  if (cfg.modo === "personalizado" && cfg.essencial + cfg.lazer + cfg.poupanca !== 100) {
+    throw new Error("Os percentuais precisam somar 100%.");
+  }
+  const valor = JSON.stringify(cfg);
+  await db.insert(systemConfig)
+    .values({ chave: "orcamento", valor, updatedAt: Date.now() })
+    .onConflictDoUpdate({ target: systemConfig.chave, set: { valor, updatedAt: Date.now() } });
+  // "Investir X%": realinha as receitas ainda não investidas ao novo percentual de poupança.
+  // Receitas já marcadas como investidas mantêm o valor histórico.
+  await db.execute(sql`UPDATE transacoes SET valor_investir = ROUND(valor * ${cfg.poupanca} / 100, 2) WHERE tipo = 'receita' AND COALESCE(investido, false) = false`);
+  return cfg;
 }
 
 export async function listUsers() {

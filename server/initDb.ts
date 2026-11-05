@@ -211,6 +211,7 @@ export async function initDatabase(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_recorrencia_grupo ON transacoes ("recorrenciaGrupoId");
         ALTER TABLE IF EXISTS transacoes ADD COLUMN IF NOT EXISTS investido BOOLEAN NOT NULL DEFAULT false;
         ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS "bottomNavConfig" TEXT;
+        ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT true;
         CREATE INDEX IF NOT EXISTS idx_data_vencimento ON transacoes ("dataVencimento");
 
         -- Configurações do sistema (chave/valor) — existe em produção via drizzle; garantida aqui

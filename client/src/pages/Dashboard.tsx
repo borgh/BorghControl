@@ -2,6 +2,8 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc";
 import AvisosTerminoContratos from "@/components/AvisosTerminoContratos";
 import MetaFinanceiraCard from "@/components/MetaFinanceiraCard";
+import FluxoCaixaCard from "@/components/FluxoCaixaCard";
+import ScoreSaudeCard from "@/components/ScoreSaudeCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -330,6 +332,12 @@ export default function Dashboard() {
           </>
         );
       })()}
+
+      {/* Fluxo de caixa (Realizado × Projetado) + Score de saúde financeira */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="lg:col-span-2"><FluxoCaixaCard mes={mesFiltro} ano={anoFiltro} /></div>
+        <ScoreSaudeCard mes={mesFiltro} ano={anoFiltro} />
+      </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
